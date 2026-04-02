@@ -1,0 +1,34 @@
+import { IsNumber, IsString, IsOptional, IsDateString } from 'class-validator';
+
+export class CreateTransactionDto {
+  @IsNumber()
+  amount: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsDateString()
+  transactionDate: string;
+
+  @IsNumber()
+  expenseReasonId: number;
+}
+
+export class UpdateTransactionDto {
+  @IsOptional()
+  @IsNumber()
+  amount?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsDateString()
+  transactionDate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  expenseReasonId?: number;
+}

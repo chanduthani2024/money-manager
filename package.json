@@ -1,0 +1,39 @@
+{
+  "name": "money-manager",
+  "version": "1.0.0",
+  "description": "Personal Finance and Monthly Salary Allocation Web Application",
+  "private": true,
+  "scripts": {
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd backend && npm run start:dev",
+    "start:frontend": "cd frontend && npm start",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "dev": "concurrently \"npm run start:backend\" \"wait-on http://localhost:3001 && npm run start:frontend\"",
+    "setup": "npm run install:all && echo 'Setup complete! Run npm run dev to start both servers.'"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0",
+    "wait-on": "^7.2.0"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "keywords": [
+    "finance",
+    "budget",
+    "money-management",
+    "expense-tracker",
+    "react",
+    "nestjs",
+    "postgresql",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT"
+}

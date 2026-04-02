@@ -1,0 +1,193 @@
+Build a full-stack personal finance and monthly salary allocation web application using React for the frontend, NestJS for the backend API, and PostgreSQL for the database.
+
+The app should help a user manage monthly salary by splitting it into categories such as:
+
+Wants
+
+Needs
+
+Investments
+
+Loan repayments
+
+Gym
+
+Bike service
+
+Bike petrol
+
+Hostel rent
+
+Other custom expense reasons
+
+Each expense reason should belong to a higher-level category like wants, needs, or investments.
+
+Main goals
+User can enter monthly salary/income.
+
+User can allocate planned budget amounts to each expense reason.
+
+User can record actual spending transactions against those reasons.
+
+User can see remaining balance after all allocations/spending.
+
+User can view dashboards to understand where money is going.
+
+User can compare current month vs previous month spending.
+
+User can identify which category has the highest spending priority.
+
+Required features
+1. Authentication
+Simple login/register for a single user or multi-user support.
+
+JWT-based authentication using NestJS.
+
+2. Monthly budget management
+Create monthly budget entries.
+
+Store salary credited for the month.
+
+Add planned allocations under each reason.
+
+Show total allocated, total spent, and remaining balance.
+
+3. Expense tracking
+Add, edit, delete expense records.
+
+Each expense should have:
+
+date
+
+amount
+
+reason
+
+category (wants / needs / investments)
+
+notes
+
+month/year
+
+Support recurring monthly expenses like rent, loan, gym, bike service, petrol.
+
+4. Dashboard analytics
+Pie chart showing spending percentage by category:
+
+wants
+
+needs
+
+investments
+
+Bar chart for monthly comparison.
+
+Line chart for spending trend over time.
+
+Cards for:
+
+total salary
+
+total spent
+
+total remaining
+
+category-wise spending
+
+top spending reason
+
+5. Comparison and insights
+Compare current month vs previous month.
+
+Show whether wants spending increased or decreased.
+
+Show category-wise percentage change.
+
+Highlight overspending against budget.
+
+Show alerts for low remaining balance.
+
+6. Filters and reports
+Filter by month, year, category, and reason.
+
+Search transactions.
+
+Export data to Excel or CSV.
+
+View summary reports.
+
+Database design
+Create PostgreSQL tables for:
+
+users
+
+monthly_budgets
+
+categories
+
+expense_reasons
+
+transactions
+
+budget_allocations
+
+recurring_expenses
+
+Backend API
+Create REST APIs for:
+
+authentication
+
+monthly salary creation
+
+budget allocation management
+
+expense CRUD
+
+dashboard summary
+
+monthly comparison report
+
+chart data endpoints
+
+Frontend pages
+Login/Register page
+
+Dashboard page
+
+Add Salary/Budget page
+
+Add Expense page
+
+Monthly Summary page
+
+Reports/Analytics page
+
+Category management page
+
+UI requirements
+Clean and modern finance dashboard UI.
+
+Responsive design for desktop and mobile.
+
+Use charts and cards to visualize data clearly.
+
+Use React component-based structure.
+
+Use reusable form components and table components.
+
+Tech stack
+Frontend: React, TypeScript, Tailwind CSS, Chart.js or Recharts
+
+Backend: NestJS, TypeScript, Prisma or TypeORM
+
+Database: PostgreSQL
+
+Additional logic
+Salary should be divided into multiple planned buckets.
+
+Expenses should reduce the remaining balance automatically.
+
+Dashboard should calculate percentage spent per category.
+
+Previous month comparison should be based on same category totals.
