@@ -38,4 +38,13 @@ export class User {
 
   @OneToMany(() => Category, (category) => category.user)
   categories: Category[];
+
+  @Column({ nullable: true })
+  googleId: string;
+
+  @Column({ nullable: true })
+  googleRefreshToken: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastGmailSync: Date;
 }

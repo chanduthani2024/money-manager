@@ -1,0 +1,46 @@
+1. What you need to set up (Google side)
+
+To use Google login + read emails, you’ll work with:
+
+Google OAuth 2.0
+Gmail API
+✅ Steps to configure (important)
+1. Go to Google Cloud Console
+Google Cloud Console
+Create a new project
+2. Enable APIs
+
+Enable:
+
+Gmail API
+3. Create OAuth Credentials
+Go to → “Credentials”
+Create → OAuth Client ID
+
+Choose:
+
+Web Application
+
+Add:
+
+Authorized redirect URI
+Example:
+http://localhost:3002/auth/google/callback
+
+👉 You will get:
+
+Client ID
+Client Secret
+4. Scopes (VERY IMPORTANT)
+
+You need these scopes:
+
+openid
+email
+profile
+https://www.googleapis.com/auth/gmail.readonly
+
+👉 This allows:
+
+Login
+Read emails

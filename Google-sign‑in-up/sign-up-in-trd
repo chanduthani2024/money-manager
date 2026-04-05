@@ -1,0 +1,126 @@
+TRD – Action 1: Google sign‑up / sign‑in
+A. Google Cloud Console setup (for auth)
+Create project
+
+Go to Google Cloud Console → create/select a project.
+
+Enable “Google Identity Services / OAuth”
+
+Open “APIs & Services → Credentials”.
+
+Configure OAuth consent screen
+
+In “APIs & Services → OAuth consent screen”:
+
+User type: “External”.
+
+App name, support email, etc.
+
+For Action 1 you only need basic OpenID scopes: openid, email, profile.
+
+Add yourself as test user while developing.
+
+Create OAuth 2.0 client (Web application)
+
+In “Credentials → Create credentials → OAuth client ID → Application type: Web application”.
+
+Authorized redirect URIs (examples):
+
+Local: http://localhost:3000/api/auth/google/callback
+
+Prod: https://your-domain.com/api/auth/google/callback
+
+Save Client ID and Client Secret – use only on backend.
+
+B. Auth flow design (high‑level)
+Use the standard OAuth 2.0 “web server application” flow: browser is redirected to Google, user selects account, Google sends code back to your backend, backend exchanges code for tokens.
+
+Frontend shows the “Continue with Google / Sign in with Google” button.
+
+Backend is responsible for:
+
+Redirecting to Google with proper query params.
+
+Handling callback.
+
+Exchanging auth code → tokens.
+
+Creating/finding user.
+
+Issuing your own JWT.
+
+C. Endpoints (suggested)
+Backend (NestJS/Express style):
+
+GET /auth/google
+
+Query: mode=signup or mode=signin.
+
+Logic:
+
+Build Google auth URL with:
+
+client_id (from console)
+
+redirect_uri (/auth/google/callback)
+
+response_type=code
+
+scope=openid email profile
+
+access_type=offline (gives refresh token if you ever need it later)
+
+state (random string, also store in session/DB to protect against CSRF)
+
+Redirect browser to this URL.
+
+GET /auth/google/callback
+
+Receives code and state.
+
+Steps:
+
+Validate state matches what you stored.
+
+Exchange code for tokens via Google OAuth endpoint or googleapis npm client.
+
+You get: access_token, id_token, (maybe refresh_token).
+
+Verify id_token:
+
+Validate signature and audience with Google public keys (library does this for you).
+
+Extract claims: sub (Google user id), email, email_verified, name, picture.
+
+Map to your user:
+
+If mode=signup:
+
+If user with this email already exists:
+
+Option A: Treat as login and just link Google to that user.
+
+Option B: Return “Email already registered. Please sign in.”
+
+If not exists: create user row:
+
+id, email, name, avatar_url, google_sub, auth_provider='google' (or 'local+google').
+
+If mode=signin:
+
+Lookup by email or by google_sub.
+
+If user not found → return error “Account does not exist”.
+
+Issue your own JWT (same as your normal login flow).
+
+Redirect back to frontend with JWT (e.g., via cookie or URL fragment).
+
+D. DB changes (minimal)
+Add to users table:
+
+google_sub (string, nullable) – Google’s stable user id.
+
+auth_provider (enum: local, google, local+google).
+
+Optionally separate user_providers table if you want many providers later.

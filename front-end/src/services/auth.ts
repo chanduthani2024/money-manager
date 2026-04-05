@@ -34,6 +34,10 @@ export const authService = {
     return localStorage.getItem('token');
   },
 
+  setToken(token: string) {
+    localStorage.setItem('token', token);
+  },
+
   isAuthenticated(): boolean {
     return !!this.getStoredToken();
   },

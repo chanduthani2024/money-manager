@@ -12,6 +12,7 @@ import { AddExpensePage } from './pages/AddExpensePage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { CategoriesPage } from './pages/CategoriesPage';
+import { GoogleOAuthRedirectPage } from './pages/GoogleOAuthRedirectPage';
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
                 </PrivateRoute>
               }
             />
+            <Route path="/auth/callback" element={<GoogleOAuthRedirectPage />} />
           </Routes>
         </div>
       </Router>

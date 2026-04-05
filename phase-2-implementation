@@ -1,0 +1,31 @@
+Phase 2 : 
+Let us also do the Google Authentication like signup/sign-in with google and  as of now we are registering with the normal authentication 
+
+The purpose of doing google authentication is to syncup with the google mails and need to read my bank transaction mail able to show in the transactions so that i can classify the reason for the transaction as of iam just opening my emails and reading that and entering it manually in the 
+Add Expense page but i want to make it automate here just here i will just classify the expense reasons here 
+(Note : All the user mail should be able to authenticate with google and sync up successfully if the mail is registered with existed google account . It is not like hardcoding any specific user mail keys and able work for that user mail  )
+
+***************** MY BANK STATEMENTS WHEN MONEY IS DEBITED ***************************
+From the email : alerts@hdfcbank.bank.in 
+Subject : You have done a UPI txn. Check details!
+Body : Dear Customer, Rs.60.00 has been debited from account 8799 to VPA nutrimony.easebuzz@ypbiz NUTRIMONY on 02-04-26. Your UPI transaction reference number is 239910341833. If you did not authorize this transaction, please report it immediately by calling 18002586161 Or SMS BLOCK UPI to 7308080808. Warm Regards, HDFC Bank
+
+The above is the usual message that i get whenever i do transactions so from the above message i cam to know that i have done transaction 60 rupees so this is one of the transactions
+And this is like standard mesage whenver the money is debited 
+
+Let us implement the actions one by one if the action one is successfully completed and tested then only we will proceed the next action
+(Note : Action development —--------> run without errors —--------> test the application —--------> proceed to next step)
+
+Actions : 
+Action one : 
+In the sign up page , i need to have continue with google so that i can register with the google directly. This functionality is like google will somehow generate its own token i think we need to decode the token and extract the information and convert into our normal jwt token and store that user information in the database.
+In the sign in page,  i need to see the signin with google after i click the button it should give me list of google accounts to select then after selecting the account then, it should decode and confirm the email whether is present or not in the database if it is there then we can login successfully else we say the account does not exist.
+
+Action two : 
+I need to have the syncup button to get the emails (The emails which are required only in this context alerts@hdfcbank.bank.in) need to have the filter for the sync up like selecting the date range so that in that range only we can able get debited emails and these synced up email dates should be stored in the database such that next time if we try to syncup with the same date range then it will tell already the date range emails are synced up 
+
+Action three : 
+In the transactions 
+So, in the transactions basically it will show the debited amount and the date when it got debited
+So here i will classify the expense reason (this is like one step classification no need to enter the money manually ) 
+** Do not disturb the manual entry as we add the expenses in the Add Expense page  we are keeping the manual and automatically ***

@@ -1,0 +1,28 @@
+BRD – Action 1: Google sign‑up / sign‑in
+Business goal:
+
+As a user, I can:
+
+Click “Continue with Google” on Sign Up to create an account using my Google email.
+
+Click “Sign in with Google” on Sign In to log in without entering a password.
+
+If my Google email already exists in the system (created earlier with normal signup), the app should link my Google login to the same account instead of creating a duplicate.
+
+If I use a Google account that is not registered in your DB:
+
+In Sign In flow: show “Account does not exist. Please sign up first.”
+
+In Sign Up flow: create a new user.
+
+Security:
+
+No storing Google client secret on frontend.
+
+Google token is converted into your normal JWT for your app session.
+
+Non‑functional:
+
+UX should show a proper error if Google login fails or user cancels.
+
+Works on localhost and on your production domain.
