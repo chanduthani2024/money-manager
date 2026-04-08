@@ -38,6 +38,10 @@ export const authService = {
     localStorage.setItem('token', token);
   },
 
+  setUser(user: User) {
+    localStorage.setItem('user', JSON.stringify(user));
+  },
+
   isAuthenticated(): boolean {
     return !!this.getStoredToken();
   },

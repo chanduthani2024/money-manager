@@ -73,6 +73,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       authService.setToken(token);
       const profile = await authService.getProfile();
+      authService.setUser(profile);
       setUser(profile);
     } catch (error) {
       throw error;

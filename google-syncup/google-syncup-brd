@@ -1,0 +1,33 @@
+Email Sync for Bank Transactions (Phase 1)
+
+🎯 Objective
+Enable users to fetch their bank-related emails from Gmail within a selected date range and display/log the raw email content.
+
+👤 User Story
+As a user,
+I want to click a “Sync Emails” button,
+Select a date range,
+So that I can fetch my bank transaction emails automatically instead of manually checking Gmail.
+
+
+✅ Scope (Phase 1 ONLY)
+
+✔ Google authenticated users
+✔ Use Gmail access permission (already granted)
+✔ Fetch emails using:
+
+sender (bank emails)
+date range
+
+✔ Display / log:
+
+email subject
+email body
+
+🎯 Success Criteria
+User clicks sync
+Emails are fetched successfully
+Console logs show:
+subject
+body
+
