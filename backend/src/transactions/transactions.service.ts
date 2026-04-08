@@ -134,7 +134,7 @@ export class TransactionsService {
 
   async remove(id: number): Promise<void> {
     const transaction = await this.findOne(id);
-    
+    await this.transactionRepository.delete(id);
     // Subtract amount from budget allocation
     await this.updateBudgetAllocation(
       transaction.userId,
@@ -143,8 +143,6 @@ export class TransactionsService {
       transaction.year,
       -Number(transaction.amount)
     );
-
-    await this.transactionRepository.delete(id);
   }
 
   private async updateBudgetAllocation(
