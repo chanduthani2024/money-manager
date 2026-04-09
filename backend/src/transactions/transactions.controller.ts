@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Request, Query } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
-import { CreateTransactionDto, UpdateTransactionDto } from './dto/transaction.dto';
+import { CreateTransactionDto, UpdateTransactionDto, GmailSyncDto } from './dto/transaction.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('transactions')
@@ -11,6 +11,11 @@ export class TransactionsController {
   @Post()
   create(@Request() req, @Body() createTransactionDto: CreateTransactionDto) {
     return this.transactionsService.create(req.user.id, createTransactionDto);
+  }
+
+  @Post('sync-emails')
+  syncEmails(@Request() req, @Body() syncDto: GmailSyncDto) {
+    return this.transactionsService.syncEmails(req.user.id, syncDto);
   }
 
   @Get()

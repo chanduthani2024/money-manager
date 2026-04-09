@@ -1,0 +1,12 @@
+Transaction Extraction from Email Content
+
+
+🎯 Objective
+
+Automatically extract transaction details (amount, type, date, merchant) from bank email content.
+
+👤 User Story
+As a user
+I want the system to automatically detect transaction details from my bank emails
+So that I don’t need to manually read and enter amount/date
+

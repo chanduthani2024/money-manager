@@ -1,5 +1,5 @@
 import { apiClient } from './api';
-import { Transaction, CreateTransaction, UpdateTransaction } from '../types/budget';
+import { Transaction, CreateTransaction, UpdateTransaction, GmailSyncResponse } from '../types/budget';
 
 interface TransactionFilters {
   month?: number;
@@ -35,5 +35,9 @@ export const transactionService = {
 
   async getCategorySpending(month: number, year: number): Promise<any[]> {
     return apiClient.get<any[]>(`/transactions/category-spending/${month}/${year}`);
+  },
+
+  async syncEmails(startDate: string, endDate: string): Promise<GmailSyncResponse> {
+    return apiClient.post<GmailSyncResponse>('/transactions/sync-emails', { startDate, endDate });
   },
 };

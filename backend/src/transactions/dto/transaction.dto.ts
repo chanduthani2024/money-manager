@@ -32,3 +32,11 @@ export class UpdateTransactionDto {
   @IsNumber()
   expenseReasonId?: number;
 }
+
+export class GmailSyncDto {
+  @IsDateString()
+  startDate: string;
+
+  @IsDateString()
+  endDate: string;
+}

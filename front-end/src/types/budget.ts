@@ -82,7 +82,19 @@ export interface CreateTransaction {
   transactionDate: string;
   expenseReasonId: number;
 }
+export interface GmailMessage {
+  messageId: string;
+  subject: string;
+  from: string;
+  date: string;
+  snippet: string;
+  body: string;
+}
 
+export interface GmailSyncResponse {
+  emails: GmailMessage[];
+  messageCount: number;
+}
 export interface UpdateTransaction {
   amount?: number;
   notes?: string;
