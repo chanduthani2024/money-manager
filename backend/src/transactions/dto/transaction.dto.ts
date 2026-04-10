@@ -40,3 +40,12 @@ export class GmailSyncDto {
   @IsDateString()
   endDate: string;
 }
+
+export class ClassifyGmailTransactionDto {
+  @IsNumber()
+  expenseReasonId: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}

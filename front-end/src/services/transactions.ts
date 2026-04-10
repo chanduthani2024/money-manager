@@ -1,5 +1,11 @@
 import { apiClient } from './api';
-import { Transaction, CreateTransaction, UpdateTransaction, GmailSyncResponse } from '../types/budget';
+import {
+  Transaction,
+  CreateTransaction,
+  UpdateTransaction,
+  GmailSyncResponse,
+  GmailTransaction,
+} from '../types/budget';
 
 interface TransactionFilters {
   month?: number;
@@ -39,5 +45,17 @@ export const transactionService = {
 
   async syncEmails(startDate: string, endDate: string): Promise<GmailSyncResponse> {
     return apiClient.post<GmailSyncResponse>('/transactions/sync-emails', { startDate, endDate });
+  },
+
+  async getPendingGmailTransactions(): Promise<GmailTransaction[]> {
+    return apiClient.get<GmailTransaction[]>('/transactions/gmail-pending');
+  },
+
+  async classifyGmailTransaction(id: number, expenseReasonId: number, notes?: string): Promise<void> {
+    return apiClient.post<void>(`/transactions/gmail-transactions/${id}/classify`, { expenseReasonId, notes });
+  },
+
+  async rejectGmailTransaction(id: number): Promise<void> {
+    return apiClient.post<void>(`/transactions/gmail-transactions/${id}/reject`);
   },
 };

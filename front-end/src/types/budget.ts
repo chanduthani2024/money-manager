@@ -91,6 +91,24 @@ export interface GmailMessage {
   body: string;
 }
 
+export interface GmailTransaction {
+  id: number;
+  messageId: string;
+  subject?: string;
+  fromAddress?: string;
+  body?: string;
+  snippet?: string;
+  rawDate?: string;
+  transactionDate?: string;
+  amount?: number;
+  transactionType?: 'debited' | 'credited' | 'unknown';
+  merchant?: string;
+  expenseReasonId?: number;
+  isClassifiedReason: boolean;
+  isRejected: boolean;
+  createdAt: string;
+}
+
 export interface GmailSyncResponse {
   emails: GmailMessage[];
   messageCount: number;

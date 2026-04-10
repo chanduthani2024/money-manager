@@ -1,4 +1,6 @@
-Transaction Extraction from Email Content
+Feature Name
+
+Automated Transaction Ingestion with User-Controlled Classification
 
 
 🎯 Objective
@@ -10,3 +12,10 @@ As a user
 I want the system to automatically detect transaction details from my bank emails
 So that I don’t need to manually read and enter amount/date
 
+* we should also able to have the right to reject the amount as there are many reasons 
+sometimes we have entered it manually that is why iam rejecting that 
+* I think we need to maintain one table that should contain the amount and tranasction_type(debited / credited) , time , is_classified_reason , is_rejcted etc...
+the data should come from the gmail_sync_records table 
+* once it is rejected then we are not going to show for classifying that 
+* If it is debited we decrease the money from the total but if it is credited then we increase in the total balance
+* Until and unless we classfy or adding the expense manually the Total Spent should not effecting we are just getting the amount automatically that is only thing we did here 

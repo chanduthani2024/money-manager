@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { transactionService } from '../services/transactions';
 import { categoryService, expenseReasonService } from '../services/categories';
-import { Transaction, Category, ExpenseReason } from '../types/budget';
+import { Transaction, Category, ExpenseReason, GmailTransaction } from '../types/budget';
 import { toast } from 'react-hot-toast';
 import { 
   Plus, 
@@ -11,7 +11,10 @@ import {
   Trash2, 
   Calendar,
   IndianRupee,
-  FileText
+  FileText,
+  X,
+  Zap,
+  Target
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -25,6 +28,8 @@ interface TransactionFilters {
 
 export const TransactionsPage: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pendingGmailTransactions, setPendingGmailTransactions] = useState<GmailTransaction[]>([]);
+  const [pendingSelection, setPendingSelection] = useState<Record<number, number>>({});
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenseReasons, setExpenseReasons] = useState<ExpenseReason[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,9 +38,40 @@ export const TransactionsPage: React.FC = () => {
     year: new Date().getFullYear(),
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [showReasonSelector, setShowReasonSelector] = useState(false);
+  const [currentTransactionId, setCurrentTransactionId] = useState<number>(-1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [selectedReasonForNotes, setSelectedReasonForNotes] = useState<ExpenseReason | null>(null);
+  const [transactionNotes, setTransactionNotes] = useState('');
+
+  const fetchPendingGmailTransactions = async () => {
+    try {
+      const data = await transactionService.getPendingGmailTransactions();
+      setPendingGmailTransactions(data);
+    } catch (error) {
+      toast.error('Failed to load pending Gmail transactions');
+    }
+  };
+
+  const fetchInitialData = async () => {
+    try {
+      const [categoriesData, expenseReasonsData] = await Promise.all([
+        categoryService.getAll(),
+        expenseReasonService.getAll(),
+      ]);
+      
+      setCategories(categoriesData);
+      setExpenseReasons(expenseReasonsData);
+      await fetchPendingGmailTransactions();
+    } catch (error) {
+      toast.error('Failed to load data');
+    }
+  };
 
   useEffect(() => {
     fetchInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -53,20 +89,6 @@ export const TransactionsPage: React.FC = () => {
 
     fetchData();
   }, [filters]);
-
-  const fetchInitialData = async () => {
-    try {
-      const [categoriesData, expenseReasonsData] = await Promise.all([
-        categoryService.getAll(),
-        expenseReasonService.getAll(),
-      ]);
-      
-      setCategories(categoriesData);
-      setExpenseReasons(expenseReasonsData);
-    } catch (error) {
-      toast.error('Failed to load data');
-    }
-  };
 
   const fetchTransactions = async () => {
     try {
@@ -94,6 +116,27 @@ export const TransactionsPage: React.FC = () => {
     }
   };
 
+  const handleClassifyGmailTransaction = async (transactionId: number, expenseReasonId: number) => {
+    try {
+      await transactionService.classifyGmailTransaction(transactionId, expenseReasonId);
+      toast.success('Email transaction classified successfully');
+      fetchPendingGmailTransactions();
+      fetchTransactions();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to classify email transaction');
+    }
+  };
+
+  const handleRejectGmailTransaction = async (transactionId: number) => {
+    try {
+      await transactionService.rejectGmailTransaction(transactionId);
+      toast.success('Email transaction rejected successfully');
+      fetchPendingGmailTransactions();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to reject email transaction');
+    }
+  };
+
   const clearFilters = () => {
     setFilters({
       month: new Date().getMonth() + 1,
@@ -109,6 +152,101 @@ export const TransactionsPage: React.FC = () => {
       maximumFractionDigits: 0,
     }).format(amount);
   };
+
+  // Open reason selector modal
+  const openReasonSelector = (transactionId: number) => {
+    setCurrentTransactionId(transactionId);
+    setShowReasonSelector(true);
+    setSearchTerm('');
+  };
+
+  // Close reason selector modal
+  const closeReasonSelector = () => {
+    setShowReasonSelector(false);
+    setCurrentTransactionId(-1);
+    setSearchTerm('');
+  };
+
+  // Close notes modal
+  const closeNotesModal = () => {
+    setShowNotesModal(false);
+    setSelectedReasonForNotes(null);
+    setTransactionNotes('');
+  };
+
+  // Handle final classification with notes
+  const handleClassifyWithNotes = async () => {
+    if (!selectedReasonForNotes || currentTransactionId < 0) return;
+
+    try {
+      await transactionService.classifyGmailTransaction(
+        currentTransactionId, 
+        selectedReasonForNotes.id, 
+        transactionNotes.trim() || undefined
+      );
+      toast.success('Email transaction classified successfully');
+      closeNotesModal();
+      fetchPendingGmailTransactions();
+      fetchTransactions();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to classify email transaction');
+    }
+  };
+
+  // Handle reason selection
+  const handleReasonSelect = (reason: ExpenseReason) => {
+    setSelectedReasonForNotes(reason);
+    setTransactionNotes('');
+    setShowReasonSelector(false);
+    setShowNotesModal(true);
+  };
+
+  // Get icon for reason
+  const getReasonIcon = (reasonName: string): React.ReactNode => {
+    const iconClass = "h-5 w-5 text-gray-600";
+    
+    switch (reasonName.toLowerCase()) {
+      case 'restaurant':
+      case 'dining':
+        return <span className={iconClass}>🍽️</span>;
+      case 'grocery':
+        return <span className={iconClass}>🛒</span>;
+      case 'fuel':
+      case 'petrol':
+        return <span className={iconClass}>⛽</span>;
+      case 'uber':
+      case 'taxi':
+        return <span className={iconClass}>🚕</span>;
+      case 'movie':
+        return <span className={iconClass}>🎬</span>;
+      case 'clothes':
+        return <span className={iconClass}>👕</span>;
+      case 'electricity':
+        return <span className={iconClass}>💡</span>;
+      case 'internet':
+        return <span className={iconClass}>🌐</span>;
+      default:
+        return <span className={iconClass}>💳</span>;
+    }
+  };
+
+  // Filter reasons by search term for selector
+  const selectorFilteredReasons = expenseReasons.filter(reason => {
+    if (searchTerm.length === 0) return true;
+    return reason.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           reason.description?.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
+  // Get suggested reasons (for demo purposes, using first few reasons)
+  const suggestedReasons = expenseReasons.slice(0, 3);
+  const otherReasons = selectorFilteredReasons.filter(reason => 
+    !suggestedReasons.some(suggested => suggested.id === reason.id)
+  );
+
+  const groupedReasons = categories.reduce((acc, category) => {
+    acc[category.name] = expenseReasons.filter(reason => reason.categoryId === category.id);
+    return acc;
+  }, {} as Record<string, ExpenseReason[]>);
 
   const getCategoryColor = (categoryType: string) => {
     switch (categoryType.toLowerCase()) {
@@ -163,6 +301,123 @@ export const TransactionsPage: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {pendingGmailTransactions.length > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Pending Bank Email Transactions</h2>
+              <p className="text-sm text-gray-500">Classify or reject email transactions before they affect spending.</p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {pendingGmailTransactions.map((item) => {
+              // Format date to remove timezone
+              const formattedDate = item.rawDate 
+                ? item.rawDate.split(' +')[0] || item.rawDate.split(' -')[0] || item.rawDate
+                : item.transactionDate?.split('T')[0] || 'No date';
+              
+              // Format from address to remove email part
+              const formattedFrom = item.fromAddress 
+                ? item.fromAddress.replace(/\s*<[^>]*>$/, '').trim()
+                : 'Unknown sender';
+              
+              // Format amount with transaction type
+              const formatAmount = (amount: number | null | undefined, type: string) => {
+                if (!amount && amount !== 0) return 'Amount unavailable';
+                const formattedAmount = new Intl.NumberFormat('en-IN', { 
+                  style: 'currency', 
+                  currency: 'INR',
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0
+                }).format(amount);
+                
+                const typeLabel = type === 'debited' ? 'Debited' : 
+                                 type === 'credited' ? 'Credited' : 'Unknown';
+                const typeColor = type === 'debited' ? 'text-red-600' : 
+                                 type === 'credited' ? 'text-green-600' : 'text-gray-600';
+                
+                return (
+                  <div className="flex flex-col items-end">
+                    <span className={`text-xs font-medium ${typeColor} uppercase tracking-wide`}>
+                      {typeLabel}
+                    </span>
+                    <span className="text-lg font-bold text-gray-900">
+                      {formattedAmount}
+                    </span>
+                  </div>
+                );
+              };
+
+              return (
+                <div key={item.id} className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-gray-900 mb-1">{item.subject || 'Bank transaction email'}</p>
+                      <p className="text-xs text-gray-500 mb-1">{formattedFrom}</p>
+                      <p className="text-xs text-gray-500">{formattedDate}</p>
+                    </div>
+                    {formatAmount(item.amount, item.transactionType || 'unknown')}
+                  </div>
+                  <p className="mt-3 text-sm text-gray-600 line-clamp-2">{item.snippet || 'No content available'}</p>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end">
+                  <div>
+                    <label className="form-label">Select expense reason</label>
+                    <button
+                      type="button"
+                      onClick={() => openReasonSelector(item.id)}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-left hover:border-primary-300 hover:bg-primary-50 transition-all focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <div className="flex items-center space-x-3">
+                        {pendingSelection[item.id] ? (
+                          <>
+                            <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                              {getReasonIcon(expenseReasons.find(r => r.id === pendingSelection[item.id])?.name || '')}
+                            </div>
+                            <span className="text-gray-900">{expenseReasons.find(r => r.id === pendingSelection[item.id])?.name}</span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                              <Target className="h-4 w-4 text-gray-400" />
+                            </div>
+                            <span className="text-gray-500">Select expense reason</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const reasonId = pendingSelection[item.id];
+                      if (reasonId) {
+                        const reason = expenseReasons.find(r => r.id === reasonId);
+                        if (reason) {
+                          setCurrentTransactionId(item.id);
+                          setSelectedReasonForNotes(reason);
+                          setTransactionNotes('');
+                          setShowNotesModal(true);
+                        }
+                      }
+                    }}
+                    disabled={!pendingSelection[item.id]}
+                    className="btn btn-primary"
+                  >
+                    Classify
+                  </button>
+                  <button
+                    onClick={() => handleRejectGmailTransaction(item.id)}
+                    className="btn btn-secondary"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       {showFilters && (
@@ -419,6 +674,234 @@ export const TransactionsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Enhanced Reason Selector Modal */}
+      {showReasonSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Select Expense Type</h3>
+              <button
+                onClick={closeReasonSelector}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Search Bar */}
+              <div className="relative mb-6">
+                <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search expense types..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  autoFocus
+                />
+              </div>
+
+              <div className="max-h-[50vh] overflow-y-auto">
+                {/* Quick Select Section */}
+                {suggestedReasons.length > 0 && searchTerm.length === 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center mb-4">
+                      <Zap className="h-4 w-4 text-yellow-500 mr-2" />
+                      <h4 className="text-sm font-medium text-gray-700">Quick Select</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {suggestedReasons.map((reason) => (
+                        <button
+                          key={`suggested-${reason.id}`}
+                          onClick={() => handleReasonSelect(reason)}
+                          className="p-4 border border-yellow-200 bg-yellow-50 rounded-lg hover:border-yellow-300 hover:bg-yellow-100 transition-all text-left"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                              {getReasonIcon(reason.name)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h5 className="font-medium text-gray-900 truncate">{reason.name}</h5>
+                              {reason.isRecurring && reason.recurringAmount && (
+                                <p className="text-sm text-green-600 font-medium">
+                                  Recurring: {formatCurrency(reason.recurringAmount)}
+                                </p>
+                              )}
+                              {reason.description && (
+                                <p className="text-xs text-gray-500 truncate">{reason.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* All Categories */}
+                <div>
+                  {searchTerm.length === 0 && suggestedReasons.length > 0 && (
+                    <h4 className="text-sm font-medium text-gray-700 mb-4">All Options by Category</h4>
+                  )}
+                  
+                  {Object.entries(groupedReasons).map(([categoryName, reasons]) => {
+                    const categoryReasons = searchTerm.length > 0 
+                      ? reasons.filter(reason => 
+                          !suggestedReasons.some(suggested => suggested.id === reason.id) &&
+                          (reason.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           reason.description?.toLowerCase().includes(searchTerm.toLowerCase()))
+                        )
+                      : reasons.filter(reason => 
+                          !suggestedReasons.some(suggested => suggested.id === reason.id)
+                        );
+
+                    if (categoryReasons.length === 0) return null;
+
+                    return (
+                      <div key={categoryName} className="mb-6">
+                        <div className="flex items-center mb-3">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                            categoryName === 'Wants' ? 'bg-purple-100 text-purple-800' :
+                            categoryName === 'Needs' ? 'bg-blue-100 text-blue-800' :
+                            categoryName === 'Investments' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {categoryName}
+                          </span>
+                          <div className="flex-1 ml-3 h-px bg-gray-200"></div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {categoryReasons.map((reason) => (
+                            <button
+                              key={reason.id}
+                              onClick={() => handleReasonSelect(reason)}
+                              className="p-4 border border-gray-200 bg-white rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-all text-left group"
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-gray-100 group-hover:bg-primary-100 rounded-lg flex items-center justify-center transition-colors">
+                                  {getReasonIcon(reason.name)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h5 className="font-medium text-gray-900 truncate">{reason.name}</h5>
+                                  {reason.isRecurring && reason.recurringAmount && (
+                                    <p className="text-sm text-green-600 font-medium">
+                                      Recurring: {formatCurrency(reason.recurringAmount)}
+                                    </p>
+                                  )}
+                                  {reason.description && (
+                                    <p className="text-xs text-gray-500 truncate">{reason.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* No Results */}
+                {selectorFilteredReasons.length === 0 && searchTerm.length > 0 && (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+                      <Search className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500">No expense types found for "{searchTerm}"</p>
+                    <p className="text-sm text-gray-400 mt-1">Try a different search term</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notes Modal */}
+      {showNotesModal && selectedReasonForNotes && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Add Transaction Note</h3>
+              <button
+                onClick={closeNotesModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-4">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                      {getReasonIcon(selectedReasonForNotes.name)}
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900">{selectedReasonForNotes.name}</h4>
+                      <p className="text-sm text-gray-500">Selected expense reason</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-gray-900">
+                      {(() => {
+                        const transaction = pendingGmailTransactions.find(t => t.id === currentTransactionId);
+                        return transaction?.amount ? new Intl.NumberFormat('en-IN', { 
+                          style: 'currency', 
+                          currency: 'INR',
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0
+                        }).format(transaction.amount) : 'Amount unavailable';
+                      })()}
+                    </div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">
+                      {(() => {
+                        const transaction = pendingGmailTransactions.find(t => t.id === currentTransactionId);
+                        return transaction?.transactionType === 'debited' ? 'Debited' : 
+                               transaction?.transactionType === 'credited' ? 'Credited' : 'Unknown';
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="form-label">Notes (Optional)</label>
+                <textarea
+                  value={transactionNotes}
+                  onChange={(e) => setTransactionNotes(e.target.value)}
+                  placeholder="Add any additional notes about this transaction..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+                  rows={3}
+                  maxLength={500}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {transactionNotes.length}/500 characters
+                </p>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={closeNotesModal}
+                  className="flex-1 btn btn-secondary"
+                >
+                  Skip Note
+                </button>
+                <button
+                  onClick={handleClassifyWithNotes}
+                  className="flex-1 btn btn-primary"
+                >
+                  Classify Transaction
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

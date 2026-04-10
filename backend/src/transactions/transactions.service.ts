@@ -5,6 +5,7 @@ import { google } from 'googleapis';
 import { Transaction } from '../entities/transaction.entity';
 import { BudgetAllocation } from '../entities/budget-allocation.entity';
 import { GmailSyncRecord } from '../entities/gmail-sync.entity';
+import { GmailTransaction } from '../entities/gmail-transaction.entity';
 import { User } from '../entities/user.entity';
 import { CreateTransactionDto, UpdateTransactionDto, GmailSyncDto } from './dto/transaction.dto';
 import { MonthlyBudgetsService } from '../monthly-budgets/monthly-budgets.service';
@@ -19,6 +20,8 @@ export class TransactionsService {
     private budgetAllocationRepository: Repository<BudgetAllocation>,
     @InjectRepository(GmailSyncRecord)
     private gmailSyncRepository: Repository<GmailSyncRecord>,
+    @InjectRepository(GmailTransaction)
+    private gmailTransactionRepository: Repository<GmailTransaction>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private monthlyBudgetsService: MonthlyBudgetsService,
@@ -59,6 +62,7 @@ export class TransactionsService {
       'alerts@hdfcbank.co.in',
       'alerts@sbi.co.in',
       'noreply@icicibank.com',
+      'alerts@hdfcbank.net'
     ];
 
     const padded = (value: number) => String(value).padStart(2, '0');
@@ -93,6 +97,35 @@ export class TransactionsService {
     return getBody(payload);
   }
 
+  private parseGmailTransaction(snippet: string, rawDate?: string) {
+    const snippetLower = (snippet || '').toLowerCase();
+    
+    const isDebited = snippetLower.includes('debited');
+    const isCredited = snippetLower.includes('credited');
+    
+    const transactionType = isDebited 
+      ? 'debited' 
+      : isCredited 
+      ? 'credited' 
+      : 'unknown';
+
+    const amountMatch = (snippet || '').match(/rs\.?\s*[\d,]+(?:\.\d{1,2})?/i);
+    console.log(`Parsing Gmail transaction: "${snippet}" | Detected amount: ${amountMatch ? amountMatch[0] : 'none'} | Type: ${transactionType}`);
+    const amount = amountMatch 
+      ? parseFloat(amountMatch[0].replace(/rs\.?\s*/i, '').replace(/,/g, ''))
+      : null;
+    console.log(`Parsed amount: ${amount} | Transaction type: ${transactionType} | Raw date: ${rawDate}`);
+
+    const dateFromHeader = rawDate ? new Date(rawDate) : null;
+    let transactionDate = dateFromHeader && !isNaN(dateFromHeader.getTime()) ? dateFromHeader : null;
+
+    return {
+      amount,
+      transactionType: transactionType as 'debited' | 'credited' | 'unknown',
+      transactionDate,
+    };
+  }
+
   async syncEmails(userId: number, syncDto: GmailSyncDto): Promise<{ emails: any[]; messageCount: number }> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
@@ -113,13 +146,13 @@ export class TransactionsService {
       throw new BadRequestException('End date must be after start date');
     }
 
-    const existingSync = await this.gmailSyncRepository.findOne({
-      where: { userId, startDate, endDate },
-    });
+    // const existingSync = await this.gmailSyncRepository.findOne({
+    //   where: { userId, startDate, endDate },
+    // });
 
-    if (existingSync) {
-      throw new ConflictException('This date range has already been synced');
-    }
+    // if (existingSync) {
+    //   throw new ConflictException('This date range has already been synced');
+    // }
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -136,7 +169,6 @@ export class TransactionsService {
       q: query,
       maxResults: 100,
     });
-
     const messages = listResponse.data.messages || [];
     const emails = await Promise.all(messages.map(async (messageMeta) => {
       const message = await gmail.users.messages.get({
@@ -171,22 +203,134 @@ export class TransactionsService {
 
     emails.forEach((email) => {
       console.log(`Gmail sync email fetched: ${email.messageId} | ${email.subject}`);
-      console.log(email.body);
     });
 
     const syncRecord = this.gmailSyncRepository.create({
       userId,
       startDate,
       endDate,
-      messageIds: messages.map((msg) => msg.id).join(','),
-      emails,
     });
 
-    await this.gmailSyncRepository.save(syncRecord);
+    const savedSyncRecord = await this.gmailSyncRepository.save(syncRecord);
+
+    const gmailTransactions = [];
+    for (const email of emails) {
+      if (!email.messageId) {
+        continue;
+      }
+
+      const existingTransaction = await this.gmailTransactionRepository.findOne({
+        where: { messageId: email.messageId },
+      });
+      if (existingTransaction) {
+        continue;
+      }
+
+      const parsed = this.parseGmailTransaction(email.snippet, email.date);
+      const gmailTransaction = this.gmailTransactionRepository.create({
+        userId,
+        gmailSyncId: savedSyncRecord.id,
+        messageId: email.messageId,
+        subject: email.subject,
+        fromAddress: email.from,
+        snippet: email.snippet,
+        rawDate: email.date,
+        transactionDate: parsed.transactionDate,
+        amount: parsed.amount,
+        transactionType: parsed.transactionType,
+        isClassifiedReason: false,
+        isRejected: false,
+      });
+      gmailTransactions.push(gmailTransaction);
+    }
+
+    if (gmailTransactions.length > 0) {
+      await this.gmailTransactionRepository.save(gmailTransactions);
+    }
+
     user.lastGmailSync = new Date();
     await this.userRepository.save(user);
 
     return { emails, messageCount: emails.length };
+  }
+
+  async getPendingGmailTransactions(userId: number) {
+    return this.gmailTransactionRepository.find({
+      where: { userId, isRejected: false, isClassifiedReason: false },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async classifyGmailTransaction(userId: number, transactionId: number, expenseReasonId: number, notes?: string) {
+    const gmailTransaction = await this.gmailTransactionRepository.findOne({
+      where: { id: transactionId, userId },
+    });
+
+    if (!gmailTransaction) {
+      throw new BadRequestException('Gmail transaction not found');
+    }
+    if (gmailTransaction.isRejected) {
+      throw new BadRequestException('This transaction has already been rejected');
+    }
+    if (gmailTransaction.isClassifiedReason) {
+      throw new BadRequestException('This transaction has already been classified');
+    }
+
+    const expenseReason = await this.expenseReasonsService.findOne(userId, expenseReasonId);
+    if (!expenseReason) {
+      throw new BadRequestException('Expense reason not found or unauthorized');
+    }
+    if (gmailTransaction.amount === null || gmailTransaction.amount === undefined) {
+      throw new BadRequestException('Unable to classify transaction without an amount');
+    }
+
+    // Use the same transaction creation logic as Add Expense page
+    if (gmailTransaction.transactionType === 'debited') {
+      let transactionDate: Date;
+      if (gmailTransaction.transactionDate) {
+        const dateObj = new Date(gmailTransaction.transactionDate);
+        transactionDate = isNaN(dateObj.getTime()) ? new Date() : dateObj;
+      } else {
+        transactionDate = new Date();
+      }
+      const month = transactionDate.getMonth() + 1;
+      const year = transactionDate.getFullYear();
+
+      const newTransaction = this.transactionRepository.create({
+        amount: Number(gmailTransaction.amount),
+        userId,
+        transactionDate,
+        month,
+        year,
+        expenseReasonId,
+        categoryId: expenseReason.categoryId,
+        notes: notes || null,
+      });
+
+      await this.transactionRepository.save(newTransaction);
+      await this.updateBudgetAllocation(userId, expenseReasonId, month, year, Number(gmailTransaction.amount));
+    }
+
+    // Mark Gmail transaction as classified
+    gmailTransaction.expenseReasonId = expenseReasonId;
+    gmailTransaction.isClassifiedReason = true;
+    return this.gmailTransactionRepository.save(gmailTransaction);
+  }
+
+  async rejectGmailTransaction(userId: number, transactionId: number) {
+    const gmailTransaction = await this.gmailTransactionRepository.findOne({
+      where: { id: transactionId, userId },
+    });
+
+    if (!gmailTransaction) {
+      throw new BadRequestException('Gmail transaction not found');
+    }
+    if (gmailTransaction.isClassifiedReason) {
+      throw new BadRequestException('Cannot reject a classified transaction');
+    }
+
+    gmailTransaction.isRejected = true;
+    return this.gmailTransactionRepository.save(gmailTransaction);
   }
 
   async findAll(userId: number, filters?: {

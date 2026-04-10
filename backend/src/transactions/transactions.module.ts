@@ -5,13 +5,14 @@ import { TransactionsController } from './transactions.controller';
 import { Transaction } from '../entities/transaction.entity';
 import { BudgetAllocation } from '../entities/budget-allocation.entity';
 import { GmailSyncRecord } from '../entities/gmail-sync.entity';
+import { GmailTransaction } from '../entities/gmail-transaction.entity';
 import { User } from '../entities/user.entity';
 import { MonthlyBudgetsModule } from '../monthly-budgets/monthly-budgets.module';
 import { ExpenseReasonsModule } from '../expense-reasons/expense-reasons.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Transaction, BudgetAllocation, GmailSyncRecord, User]),
+    TypeOrmModule.forFeature([Transaction, BudgetAllocation, GmailSyncRecord, GmailTransaction, User]),
     MonthlyBudgetsModule,
     ExpenseReasonsModule,
   ],

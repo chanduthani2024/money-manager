@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Request, Query } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
-import { CreateTransactionDto, UpdateTransactionDto, GmailSyncDto } from './dto/transaction.dto';
+import { CreateTransactionDto, UpdateTransactionDto, GmailSyncDto, ClassifyGmailTransactionDto } from './dto/transaction.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('transactions')
@@ -16,6 +16,25 @@ export class TransactionsController {
   @Post('sync-emails')
   syncEmails(@Request() req, @Body() syncDto: GmailSyncDto) {
     return this.transactionsService.syncEmails(req.user.id, syncDto);
+  }
+
+  @Get('gmail-pending')
+  getPendingGmailTransactions(@Request() req) {
+    return this.transactionsService.getPendingGmailTransactions(req.user.id);
+  }
+
+  @Post('gmail-transactions/:id/classify')
+  classifyGmailTransaction(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() classifyDto: ClassifyGmailTransactionDto,
+  ) {
+    return this.transactionsService.classifyGmailTransaction(req.user.id, +id, classifyDto.expenseReasonId, classifyDto.notes);
+  }
+
+  @Post('gmail-transactions/:id/reject')
+  rejectGmailTransaction(@Request() req, @Param('id') id: string) {
+    return this.transactionsService.rejectGmailTransaction(req.user.id, +id);
   }
 
   @Get()
