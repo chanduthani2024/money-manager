@@ -21,6 +21,7 @@ export const DashboardPage: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [syncFromDate, setSyncFromDate] = useState<string>('');
   const [syncToDate, setSyncToDate] = useState<string>('');
+  const [syncMode, setSyncMode] = useState<'7days' | '30days' | 'custom'>('7days');
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncedEmails, setSyncedEmails] = useState<GmailMessage[]>([]);
   const [syncResultAvailable, setSyncResultAvailable] = useState(false);
@@ -47,9 +48,28 @@ export const DashboardPage: React.FC = () => {
   }, [fetchDashboardData]);
 
   const handleSyncEmails = async () => {
-    if (!syncFromDate || !syncToDate) {
-      toast.error('Please select both start and end dates for sync');
-      return;
+    let startDate: string;
+    let endDate: string;
+
+    if (syncMode === '7days') {
+      const today = new Date();
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      startDate = sevenDaysAgo.toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+    } else if (syncMode === '30days') {
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+    } else {
+      if (!syncFromDate || !syncToDate) {
+        toast.error('Please select both start and end dates for sync');
+        return;
+      }
+      startDate = syncFromDate;
+      endDate = syncToDate;
     }
 
     setSyncLoading(true);
@@ -57,16 +77,12 @@ export const DashboardPage: React.FC = () => {
     setSyncResultAvailable(false);
 
     try {
-      const response = await transactionService.syncEmails(syncFromDate, syncToDate);
+      const response = await transactionService.syncEmails(startDate, endDate);
       setSyncedEmails(response.emails);
       setSyncResultAvailable(true);
       toast.success(`Synced ${response.messageCount} emails successfully`);
     } catch (error: any) {
-      if (error.response?.status === 409) {
-        toast.error(error.response.data.message || 'This date range has already been synced');
-      } else {
-        toast.error(error.response?.data?.message || 'Email sync failed');
-      }
+      toast.error(error.response?.data?.message || 'Email sync failed');
     } finally {
       setSyncLoading(false);
     }
@@ -164,74 +180,137 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       <div className="card">
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Sync Bank Emails</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Fetch bank transaction emails from Gmail for the selected date range.
+            <p className="text-sm text-gray-500">
+              Import transactions from Gmail automatically
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,220px)_minmax(0,220px)_auto] gap-3 w-full lg:w-auto items-end">
-            <label className="space-y-1 text-sm text-gray-700">
-              From
-              <input
-                type="date"
-                value={syncFromDate}
-                onChange={(e) => {
-                  setSyncFromDate(e.target.value);
-                  setSyncResultAvailable(false);
-                }}
-                className="form-input w-full"
-              />
-            </label>
-            <label className="space-y-1 text-sm text-gray-700">
-              To
-              <input
-                type="date"
-                value={syncToDate}
-                onChange={(e) => {
-                  setSyncToDate(e.target.value);
-                  setSyncResultAvailable(false);
-                }}
-                className="form-input w-full"
-              />
-            </label>
+          <div className="flex items-center gap-4">
+            {/* Time Period Selection - Horizontal */}
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                syncMode === '7days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}>
+                <input
+                  type="radio"
+                  name="syncMode"
+                  value="7days"
+                  checked={syncMode === '7days'}
+                  onChange={(e) => setSyncMode(e.target.value as '7days')}
+                  className="sr-only"
+                />
+                7 days
+              </label>
+              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                syncMode === '30days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}>
+                <input
+                  type="radio"
+                  name="syncMode"
+                  value="30days"
+                  checked={syncMode === '30days'}
+                  onChange={(e) => setSyncMode(e.target.value as '30days')}
+                  className="sr-only"
+                />
+                30 days
+              </label>
+              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                syncMode === 'custom' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}>
+                <input
+                  type="radio"
+                  name="syncMode"
+                  value="custom"
+                  checked={syncMode === 'custom'}
+                  onChange={(e) => setSyncMode(e.target.value as 'custom')}
+                  className="sr-only"
+                />
+                Custom
+              </label>
+            </div>
+
+            {/* Custom Date Inputs - Inline */}
+            {syncMode === 'custom' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={syncFromDate}
+                  onChange={(e) => {
+                    setSyncFromDate(e.target.value);
+                    setSyncResultAvailable(false);
+                  }}
+                  className="form-input text-sm py-1.5 px-2 w-32"
+                />
+                <span className="text-gray-400 text-sm">to</span>
+                <input
+                  type="date"
+                  value={syncToDate}
+                  onChange={(e) => {
+                    setSyncToDate(e.target.value);
+                    setSyncResultAvailable(false);
+                  }}
+                  className="form-input text-sm py-1.5 px-2 w-32"
+                />
+              </div>
+            )}
+
+            {/* Sync Button */}
             <button
               onClick={handleSyncEmails}
               disabled={syncLoading}
-              className="inline-flex w-fit items-center justify-center px-3 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {syncLoading ? 'Syncing...' : 'Sync Emails'}
+              {syncLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Sync
+                </>
+              )}
             </button>
           </div>
         </div>
 
         {syncedEmails.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-gray-900">Synced Emails</h3>
-            <div className="mt-4 space-y-4">
-              {syncedEmails.map((email, index) => (
-                <div key={email.messageId || index} className="border rounded-lg p-4 bg-white shadow-sm">
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{email.subject || 'No subject'}</p>
-                      <p className="text-xs text-gray-500">From: {email.from}</p>
+          <div className="mt-6 border-t pt-4">
+            <details className="group">
+              <summary className="flex items-center justify-between cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                <span>Synced Emails ({syncedEmails.length})</span>
+                <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </summary>
+              <div className="mt-3 space-y-2">
+                {syncedEmails.map((email, index) => (
+                  <div key={email.messageId || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <CreditCard className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{email.subject || 'No subject'}</p>
+                        <p className="text-xs text-gray-600 truncate">From: {email.from}</p>
+                      </div>
                     </div>
-                    <span className="text-xs text-gray-500">{email.date}</span>
+                    <span className="text-xs text-gray-500 flex-shrink-0">
+                      {new Date(email.date).toLocaleDateString()}
+                    </span>
                   </div>
-                  <p className="mt-3 text-sm text-gray-600">{email.snippet || 'No preview available'}</p>
-                  <details className="mt-3 text-sm text-gray-700">
-                    <summary className="cursor-pointer font-medium text-primary-600">View raw email body</summary>
-                    <pre className="mt-2 whitespace-pre-wrap text-xs text-gray-700">{email.body || 'No body content'}</pre>
-                  </details>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </details>
           </div>
         )}
 
         {syncResultAvailable && syncedEmails.length === 0 && !syncLoading && (
-          <p className="mt-4 text-sm text-gray-500">No bank emails were found for this date range.</p>
+          <div className="mt-4 text-center py-4">
+            <CreditCard className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">No bank emails found for this period</p>
+          </div>
         )}
       </div>
 

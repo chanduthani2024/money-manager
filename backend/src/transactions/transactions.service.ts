@@ -100,8 +100,16 @@ export class TransactionsService {
   private parseGmailTransaction(snippet: string, rawDate?: string) {
     const snippetLower = (snippet || '').toLowerCase();
     
-    const isDebited = snippetLower.includes('debited');
-    const isCredited = snippetLower.includes('credited');
+    // Debit: explicitly "debited" or "deducted from your account"
+    const isDebited = snippetLower.includes('debited') || snippetLower.includes('deducted');
+
+    // Credit: only if not debit (debit takes priority to handle "deducted...added to EMI" edge case)
+    const isCredited = !isDebited && (
+      snippetLower.includes('credited') ||
+      snippetLower.includes('deposited') ||
+      snippetLower.includes('received a credit') ||
+      snippetLower.includes('added to your account')
+    );
     
     const transactionType = isDebited 
       ? 'debited' 
@@ -109,10 +117,12 @@ export class TransactionsService {
       ? 'credited' 
       : 'unknown';
 
-    const amountMatch = (snippet || '').match(/rs\.?\s*[\d,]+(?:\.\d{1,2})?/i);
+    // Regex handles all formats:
+    // Rs.10.00 | Rs. INR 16280.00 | Rs.INR 71200.00 | INR 33700.00
+    const amountMatch = (snippet || '').match(/(?:rs\.?\s*(?:inr\s*)?|inr\s+)[\d,]+(?:\.\d{1,2})?/i);
     console.log(`Parsing Gmail transaction: "${snippet}" | Detected amount: ${amountMatch ? amountMatch[0] : 'none'} | Type: ${transactionType}`);
     const amount = amountMatch 
-      ? parseFloat(amountMatch[0].replace(/rs\.?\s*/i, '').replace(/,/g, ''))
+      ? parseFloat(amountMatch[0].replace(/rs\.?\s*/i, '').replace(/inr\s*/i, '').replace(/,/g, ''))
       : null;
     console.log(`Parsed amount: ${amount} | Transaction type: ${transactionType} | Raw date: ${rawDate}`);
 
@@ -145,14 +155,6 @@ export class TransactionsService {
     if (endDate < startDate) {
       throw new BadRequestException('End date must be after start date');
     }
-
-    // const existingSync = await this.gmailSyncRepository.findOne({
-    //   where: { userId, startDate, endDate },
-    // });
-
-    // if (existingSync) {
-    //   throw new ConflictException('This date range has already been synced');
-    // }
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -305,6 +307,7 @@ export class TransactionsService {
         expenseReasonId,
         categoryId: expenseReason.categoryId,
         notes: notes || null,
+        createdAt: gmailTransaction.rawDate ? new Date(gmailTransaction.rawDate) : new Date(),
       });
 
       await this.transactionRepository.save(newTransaction);

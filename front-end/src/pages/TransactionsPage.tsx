@@ -635,8 +635,8 @@ export const TransactionsPage: React.FC = () => {
                             )}
                             
                             <p className="text-xs text-gray-500">
-                              {format(new Date(transaction.transactionDate), 'h:mm a')} • 
-                              {format(new Date(transaction.createdAt), 'MMM d, yyyy')}
+                              {format(new Date(new Date(transaction.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })), 'h:mm a')} • 
+                              {format(new Date(new Date(transaction.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })), 'MMM d, yyyy')}
                             </p>
                           </div>
                           
