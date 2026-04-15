@@ -48,17 +48,21 @@ export class MonthlyBudgetsService {
     // Create budget allocations and sync with existing transactions
     const allocations = [];
     for (const allocation of budgetAllocations) {
-      // Calculate spent amount from existing transactions
+      // Calculate spent amount from existing transactions (debits - credits)
       const existingTransactions = await this.transactionRepository
         .createQueryBuilder('transaction')
-        .select('SUM(transaction.amount)', 'totalSpent')
+        .select('transaction.transactionType', 'transactionType')
+        .addSelect('SUM(transaction.amount)', 'total')
         .where('transaction.userId = :userId', { userId })
         .andWhere('transaction.month = :month', { month: budgetData.month })
         .andWhere('transaction.year = :year', { year: budgetData.year })
         .andWhere('transaction.expenseReasonId = :expenseReasonId', { expenseReasonId: allocation.expenseReasonId })
-        .getRawOne();
+        .groupBy('transaction.transactionType')
+        .getRawMany();
 
-      const spentAmount = parseFloat(existingTransactions?.totalSpent || '0');
+      const allocationDebits = parseFloat(existingTransactions.find(r => r.transactionType === 'debit')?.total || '0');
+      const allocationCredits = parseFloat(existingTransactions.find(r => r.transactionType === 'credit')?.total || '0');
+      const spentAmount = allocationDebits - allocationCredits;
 
       const budgetAllocation = this.budgetAllocationRepository.create({
         ...allocation,
@@ -125,16 +129,20 @@ export class MonthlyBudgetsService {
     }
 
     // Calculate total spent from actual transactions for this month/year
-    const result = await this.transactionRepository
+    // Group by transactionType so credits are subtracted from debits
+    const results = await this.transactionRepository
       .createQueryBuilder('transaction')
-      .select('SUM(transaction.amount)', 'totalSpent')
+      .select('transaction.transactionType', 'transactionType')
+      .addSelect('SUM(transaction.amount)', 'total')
       .where('transaction.userId = :userId', { userId: monthlyBudget.userId })
       .andWhere('transaction.month = :month', { month: monthlyBudget.month })
       .andWhere('transaction.year = :year', { year: monthlyBudget.year })
-      .getRawOne();
-
-    const totalSpent = parseFloat(result?.totalSpent || '0');
-
+      .groupBy('transaction.transactionType')
+      .getRawMany();
+    console.log('Transaction totals by type:', results);
+    const debits = parseFloat(results.find(r => r.transactionType === 'debit')?.total || '0');
+    const credits = parseFloat(results.find(r => r.transactionType === 'credit')?.total || '0');
+    const totalSpent = debits - credits;
     await this.monthlyBudgetRepository.update(budgetId, { totalSpent });
   }
 
@@ -166,17 +174,21 @@ export class MonthlyBudgetsService {
     // Create new budget allocations and sync with existing transactions
     const allocations = [];
     for (const allocation of budgetAllocations) {
-      // Calculate spent amount from existing transactions
+      // Calculate spent amount from existing transactions (debits - credits)
       const existingTransactions = await this.transactionRepository
         .createQueryBuilder('transaction')
-        .select('SUM(transaction.amount)', 'totalSpent')
+        .select('transaction.transactionType', 'transactionType')
+        .addSelect('SUM(transaction.amount)', 'total')
         .where('transaction.userId = :userId', { userId })
         .andWhere('transaction.month = :month', { month: existingBudget.month })
         .andWhere('transaction.year = :year', { year: existingBudget.year })
         .andWhere('transaction.expenseReasonId = :expenseReasonId', { expenseReasonId: allocation.expenseReasonId })
-        .getRawOne();
+        .groupBy('transaction.transactionType')
+        .getRawMany();
 
-      const spentAmount = parseFloat(existingTransactions?.totalSpent || '0');
+      const allocationDebits = parseFloat(existingTransactions.find(r => r.transactionType === 'debit')?.total || '0');
+      const allocationCredits = parseFloat(existingTransactions.find(r => r.transactionType === 'credit')?.total || '0');
+      const spentAmount = allocationDebits - allocationCredits;
 
       const budgetAllocation = this.budgetAllocationRepository.create({
         ...allocation,

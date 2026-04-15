@@ -63,6 +63,7 @@ export interface CreateMonthlyBudget {
 export interface Transaction {
   id: number;
   amount: number;
+  transactionType: 'debit' | 'credit';
   notes?: string;
   transactionDate: string;
   month: number;

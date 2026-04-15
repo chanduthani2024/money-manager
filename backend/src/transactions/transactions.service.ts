@@ -41,6 +41,7 @@ export class TransactionsService {
     
     const transaction = this.transactionRepository.create({
       ...createTransactionDto,
+      transactionType: createTransactionDto.transactionType || 'debit',
       userId,
       month,
       year,
@@ -287,7 +288,7 @@ export class TransactionsService {
     }
 
     // Use the same transaction creation logic as Add Expense page
-    if (gmailTransaction.transactionType === 'debited') {
+    if (gmailTransaction.transactionType === 'debited' || gmailTransaction.transactionType === 'credited') {
       let transactionDate: Date;
       if (gmailTransaction.transactionDate) {
         const dateObj = new Date(gmailTransaction.transactionDate);
@@ -300,8 +301,12 @@ export class TransactionsService {
       const month = istDate.getMonth() + 1;
       const year = istDate.getFullYear();
 
+      const isCredit = gmailTransaction.transactionType === 'credited';
+      const transactionType: 'debit' | 'credit' = isCredit ? 'credit' : 'debit';
+
       const newTransaction = this.transactionRepository.create({
         amount: Number(gmailTransaction.amount),
+        transactionType,
         userId,
         transactionDate,
         month,
@@ -313,7 +318,9 @@ export class TransactionsService {
       });
 
       await this.transactionRepository.save(newTransaction);
-      await this.updateBudgetAllocation(userId, expenseReasonId, month, year, Number(gmailTransaction.amount));
+      // For credits, subtract from spent amount (refund/income reduces expenses)
+      const amountChange = isCredit ? -Number(gmailTransaction.amount) : Number(gmailTransaction.amount);
+      await this.updateBudgetAllocation(userId, expenseReasonId, month, year, amountChange);
     }
 
     // Mark Gmail transaction as classified

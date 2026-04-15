@@ -11,6 +11,9 @@ export class Transaction {
   @Column('decimal', { precision: 10, scale: 2 })
   amount: number;
 
+  @Column({ type: 'varchar', default: 'debit' })
+  transactionType: 'debit' | 'credit';
+
   @Column({ nullable: true })
   notes: string;
 

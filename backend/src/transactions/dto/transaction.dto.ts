@@ -1,8 +1,12 @@
-import { IsNumber, IsString, IsOptional, IsDateString } from 'class-validator';
+import { IsNumber, IsString, IsOptional, IsDateString, IsIn } from 'class-validator';
 
 export class CreateTransactionDto {
   @IsNumber()
   amount: number;
+
+  @IsOptional()
+  @IsIn(['debit', 'credit'])
+  transactionType?: 'debit' | 'credit';
 
   @IsOptional()
   @IsString()

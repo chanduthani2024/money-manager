@@ -260,7 +260,8 @@ export const TransactionsPage: React.FC = () => {
   const getTotalAmount = () => {
     return transactions.reduce((sum, transaction) => {
       const amount = typeof transaction.amount === 'string' ? parseFloat(transaction.amount) : transaction.amount;
-      return sum + (isNaN(amount) ? 0 : amount);
+      const signed = transaction.transactionType === 'credit' ? -amount : amount;
+      return sum + (isNaN(signed) ? 0 : signed);
     }, 0);
   };
 
@@ -625,7 +626,8 @@ export const TransactionsPage: React.FC = () => {
                       {dayTransactions.length} transaction{dayTransactions.length !== 1 ? 's' : ''} • 
                       {formatCurrency(dayTransactions.reduce((sum, t) => {
                         const amount = typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount;
-                        return sum + (isNaN(amount) ? 0 : amount);
+                        const signed = t.transactionType === 'credit' ? -amount : amount;
+                        return sum + (isNaN(signed) ? 0 : signed);
                       }, 0))}
                     </span>
                   </h3>
@@ -656,9 +658,15 @@ export const TransactionsPage: React.FC = () => {
                           
                           <div className="flex items-center space-x-4">
                             <div className="text-right">
-                              <p className="text-lg font-bold text-gray-900">
-                                {formatCurrency(transaction.amount)}
-                              </p>
+                              {transaction.transactionType === 'credit' ? (
+                                <p className="text-lg font-bold text-green-600">
+                                  +{formatCurrency(transaction.amount)}
+                                </p>
+                              ) : (
+                                <p className="text-lg font-bold text-gray-900">
+                                  -{formatCurrency(transaction.amount)}
+                                </p>
+                              )}
                             </div>
                             
                             <div className="flex items-center space-x-2">
