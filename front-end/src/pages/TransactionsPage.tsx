@@ -312,10 +312,24 @@ export const TransactionsPage: React.FC = () => {
           </div>
           <div className="space-y-4">
             {pendingGmailTransactions.map((item) => {
-              // Format date to remove timezone
-              const formattedDate = item.rawDate 
-                ? item.rawDate.split(' +')[0] || item.rawDate.split(' -')[0] || item.rawDate
-                : item.transactionDate?.split('T')[0] || 'No date';
+              // Parse rawDate and convert to IST (handles both +0000 UTC and +0530 IST formats)
+              const formattedDate = item.rawDate
+                ? (() => {
+                    const d = new Date(item.rawDate);
+                    if (isNaN(d.getTime())) return item.rawDate;
+                    return d.toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata',
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                    });
+                  })()
+                : item.transactionDate
+                  ? new Date(item.transactionDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium' })
+                  : 'No date';
               
               // Format from address to remove email part
               const formattedFrom = item.fromAddress 

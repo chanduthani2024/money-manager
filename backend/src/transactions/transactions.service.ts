@@ -295,8 +295,10 @@ export class TransactionsService {
       } else {
         transactionDate = new Date();
       }
-      const month = transactionDate.getMonth() + 1;
-      const year = transactionDate.getFullYear();
+      // Calculate month/year in IST (UTC+5:30) to avoid day-boundary mismatches
+      const istDate = new Date(transactionDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const month = istDate.getMonth() + 1;
+      const year = istDate.getFullYear();
 
       const newTransaction = this.transactionRepository.create({
         amount: Number(gmailTransaction.amount),
