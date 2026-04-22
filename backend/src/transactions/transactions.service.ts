@@ -52,7 +52,7 @@ export class TransactionsService {
     const savedTransaction = await this.transactionRepository.save(transaction);
 
     // Update budget allocation spent amount
-    await this.updateBudgetAllocation(userId, createTransactionDto.expenseReasonId, month, year, createTransactionDto.amount);
+    await this.updateBudgetAllocation(userId, createTransactionDto.expenseReasonId, month, year, createTransactionDto.amount , "");
 
     return this.findOne(savedTransaction.id);
   }
@@ -320,7 +320,7 @@ export class TransactionsService {
       await this.transactionRepository.save(newTransaction);
       // For credits, subtract from spent amount (refund/income reduces expenses)
       const amountChange = isCredit ? -Number(gmailTransaction.amount) : Number(gmailTransaction.amount);
-      await this.updateBudgetAllocation(userId, expenseReasonId, month, year, amountChange);
+      await this.updateBudgetAllocation(userId, expenseReasonId, month, year, amountChange, transactionType );
     }
 
     // Mark Gmail transaction as classified
@@ -413,7 +413,8 @@ export class TransactionsService {
         oldExpenseReasonId,
         transaction.month,
         transaction.year,
-        -Number(oldAmount)
+        -Number(oldAmount),
+        ""
       );
 
       // Add new amount to new expense reason
@@ -424,7 +425,8 @@ export class TransactionsService {
         newExpenseReasonId,
         transaction.month,
         transaction.year,
-        newAmount
+        newAmount,
+        ""
       );
     }
 
@@ -440,7 +442,8 @@ export class TransactionsService {
       transaction.expenseReasonId,
       transaction.month,
       transaction.year,
-      -Number(transaction.amount)
+      -Number(transaction.amount),
+      ""
     );
   }
 
@@ -449,7 +452,8 @@ export class TransactionsService {
     expenseReasonId: number,
     month: number,
     year: number,
-    amountChange: number
+    amountChange: number,
+    transactionType: string
   ): Promise<void> {
     const monthlyBudget = await this.monthlyBudgetsService.findByMonthYear(userId, month, year);
     
@@ -463,12 +467,17 @@ export class TransactionsService {
 
       if (allocation) {
         // Update the specific budget allocation if it exists
-        allocation.spentAmount = Number(allocation.spentAmount) + amountChange;
+        if (transactionType === 'credit') {
+          allocation.allocatedAmount = Number(allocation.allocatedAmount) - amountChange; 
+        }
+        else{
+          allocation.spentAmount = Number(allocation.spentAmount) + amountChange;
+        }
         await this.budgetAllocationRepository.save(allocation);
       }
 
       // Always update monthly budget total spent, regardless of whether allocation exists
-      await this.monthlyBudgetsService.updateTotalSpent(monthlyBudget.id);
+      await this.monthlyBudgetsService.updateTotalSpent(monthlyBudget.id , transactionType , amountChange);
     }
   }
 

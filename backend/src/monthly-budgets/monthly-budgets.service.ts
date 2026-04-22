@@ -118,7 +118,7 @@ export class MonthlyBudgetsService {
     });
   }
 
-  async updateTotalSpent(budgetId: number): Promise<void> {
+  async updateTotalSpent(budgetId: number, transactionType: string , amountChange: number): Promise<void> {
     // Get the monthly budget to find the month, year, and userId
     const monthlyBudget = await this.monthlyBudgetRepository.findOne({
       where: { id: budgetId },
@@ -142,8 +142,15 @@ export class MonthlyBudgetsService {
     console.log('Transaction totals by type:', results);
     const debits = parseFloat(results.find(r => r.transactionType === 'debit')?.total || '0');
     const credits = parseFloat(results.find(r => r.transactionType === 'credit')?.total || '0');
-    const totalSpent = debits - credits;
-    await this.monthlyBudgetRepository.update(budgetId, { totalSpent });
+    if (transactionType === 'debit') {
+       const totalSpent = debits;
+       await this.monthlyBudgetRepository.update(budgetId, { totalSpent });
+    }
+    else if (transactionType === 'credit') {
+      const totalSpent = monthlyBudget.salary - amountChange;
+      await this.monthlyBudgetRepository.update(budgetId, { salary : totalSpent });
+    }
+   
   }
 
   async update(userId: number, id: number, updateMonthlyBudgetDto: CreateMonthlyBudgetDto): Promise<MonthlyBudget> {

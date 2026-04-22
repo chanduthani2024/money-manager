@@ -6,7 +6,7 @@ export const databaseConfig: TypeOrmModuleOptions = {
   port: 5432,
   username: 'postgres',
   password: 'chandu',
-  database: 'money_manager',
+  database: 'money_manager_test',
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   synchronize: true, // Set to false in production
   logging: true,

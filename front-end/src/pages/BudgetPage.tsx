@@ -417,7 +417,7 @@ export const BudgetPage: React.FC = () => {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-gray-600">Total Salary</p>
+              <p className="text-sm text-gray-600">Total Balance</p>
               <p className="text-2xl font-bold text-blue-600">
                 {formatCurrency(watchedSalary || 0)}
               </p>

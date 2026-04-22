@@ -123,19 +123,129 @@ export const DashboardPage: React.FC = () => {
 
   if (!dashboardData) {
     return (
-      <div className="text-center py-12">
-        <PieChartIcon className="mx-auto h-12 w-12 text-gray-400" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900">No budget data</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Create a monthly budget for {selectedMonth}/{selectedYear} to see your dashboard.
-        </p>
-        <div className="mt-6">
-          <a
-            href="/budget"
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-          >
-            Create Budget
-          </a>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <div className="flex items-center space-x-4">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="form-input py-1 text-sm"
+            >
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i + 1} value={i + 1}>
+                  {new Date(2000, i, 1).toLocaleString('default', { month: 'long' })}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="form-input py-1 text-sm"
+            >
+              {Array.from({ length: 5 }, (_, i) => {
+                const year = new Date().getFullYear() - 2 + i;
+                return (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </div>
+
+        {/* Sync Bank Emails - always visible */}
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Sync Bank Emails</h2>
+              <p className="text-sm text-gray-500">
+                Import transactions from Gmail automatically
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                  syncMode === '7days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                }`}>
+                  <input type="radio" name="syncMode" value="7days" checked={syncMode === '7days'} onChange={(e) => setSyncMode(e.target.value as '7days')} className="sr-only" />
+                  7 days
+                </label>
+                <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                  syncMode === '30days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                }`}>
+                  <input type="radio" name="syncMode" value="30days" checked={syncMode === '30days'} onChange={(e) => setSyncMode(e.target.value as '30days')} className="sr-only" />
+                  30 days
+                </label>
+                <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                  syncMode === 'custom' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                }`}>
+                  <input type="radio" name="syncMode" value="custom" checked={syncMode === 'custom'} onChange={(e) => setSyncMode(e.target.value as 'custom')} className="sr-only" />
+                  Custom
+                </label>
+              </div>
+              {syncMode === 'custom' && (
+                <div className="flex items-center gap-2">
+                  <input type="date" value={syncFromDate} onChange={(e) => { setSyncFromDate(e.target.value); setSyncResultAvailable(false); }} className="form-input text-sm py-1.5 px-2 w-32" />
+                  <span className="text-gray-400 text-sm">to</span>
+                  <input type="date" value={syncToDate} onChange={(e) => { setSyncToDate(e.target.value); setSyncResultAvailable(false); }} className="form-input text-sm py-1.5 px-2 w-32" />
+                </div>
+              )}
+              <button onClick={handleSyncEmails} disabled={syncLoading} className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                {syncLoading ? (
+                  <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>Syncing...</>
+                ) : (
+                  <><CreditCard className="h-4 w-4 mr-2" />Sync</>
+                )}
+              </button>
+            </div>
+          </div>
+          {syncedEmails.length > 0 && (
+            <div className="mt-6 border-t pt-4">
+              <details className="group">
+                <summary className="flex items-center justify-between cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                  <span>Synced Emails ({syncedEmails.length})</span>
+                  <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </summary>
+                <div className="mt-3 space-y-2">
+                  {syncedEmails.map((email, index) => (
+                    <div key={email.messageId || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <CreditCard className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{email.subject || 'No subject'}</p>
+                          <p className="text-xs text-gray-600 truncate">From: {email.from}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-500 flex-shrink-0">{new Date(email.date).toLocaleDateString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
+          {syncResultAvailable && syncedEmails.length === 0 && !syncLoading && (
+            <div className="mt-4 text-center py-4">
+              <CreditCard className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No bank emails found for this period</p>
+            </div>
+          )}
+        </div>
+
+        {/* No budget empty state */}
+        <div className="text-center py-12">
+          <PieChartIcon className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No budget data</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Create a monthly budget for {selectedMonth}/{selectedYear} to see your dashboard.
+          </p>
+          <div className="mt-6">
+            <a href="/budget" className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+              Create Budget
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -320,7 +430,7 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center">
             <IndianRupee className="h-8 w-8 text-green-500" />
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Total Salary</p>
+              <p className="text-sm font-medium text-gray-500">Total Balance</p>
               <p className="text-2xl font-bold text-gray-900">
                 {formatCurrency(dashboardData.totalSalary)}
               </p>
