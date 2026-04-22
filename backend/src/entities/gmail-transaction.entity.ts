@@ -61,6 +61,9 @@ export class GmailTransaction {
   @Column({ default: false })
   isRejected: boolean;
 
+  @Column({ type: 'varchar', length: 16, default: 'debit' })
+  cardType: 'debit' | 'credit';
+
   @CreateDateColumn()
   createdAt: Date;
 }

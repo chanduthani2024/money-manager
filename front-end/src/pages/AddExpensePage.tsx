@@ -10,6 +10,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 
 interface TransactionForm {
   amount: number;
+  transactionType: 'debit' | 'credit';
   transactionDate: string;
   notes?: string;
   expenseReasonId: number;
@@ -27,6 +28,7 @@ export const AddExpensePage: React.FC = () => {
   } = useForm<TransactionForm>({
     defaultValues: {
       transactionDate: new Date().toISOString().split('T')[0],
+      transactionType: 'debit',
     }
   });
 
@@ -42,8 +44,9 @@ export const AddExpensePage: React.FC = () => {
   const [recentReasons, setRecentReasons] = useState<ExpenseReason[]>([]);
   const [frequentReasons, setFrequentReasons] = useState<ExpenseReason[]>([]);
 
-  // Watch amount for dynamic display
+  // Watch amount and transactionType for dynamic display
   const watchedAmount = watch('amount');
+  const watchedTransactionType = watch('transactionType');
   const suggestedAmount = selectedReason ? (allocatedAmounts[selectedReason.id] || 0) : 0;
 
   // Fetch data on component mount
@@ -146,6 +149,7 @@ export const AddExpensePage: React.FC = () => {
       await transactionService.create({
         ...data,
         expenseReasonId: selectedReason!.id,
+        transactionType: data.transactionType || 'debit',
       });
       reset();
       navigate('/transactions');
@@ -459,6 +463,38 @@ export const AddExpensePage: React.FC = () => {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                  {/* Transaction Type Toggle */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Transaction Type
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setValue('transactionType', 'debit')}
+                        className={`py-2.5 px-4 rounded-lg border-2 font-semibold text-sm transition-all ${
+                          watchedTransactionType !== 'credit'
+                            ? 'border-red-500 bg-red-50 text-red-700'
+                            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                        }`}
+                      >
+                        💸 Debit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setValue('transactionType', 'credit')}
+                        className={`py-2.5 px-4 rounded-lg border-2 font-semibold text-sm transition-all ${
+                          watchedTransactionType === 'credit'
+                            ? 'border-green-500 bg-green-50 text-green-700'
+                            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                        }`}
+                      >
+                        💰 Credit
+                      </button>
+                    </div>
+                    <input type="hidden" {...register('transactionType')} />
+                  </div>
+
                   {/* Amount Input */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -536,6 +572,11 @@ export const AddExpensePage: React.FC = () => {
                       <p><span className="font-medium">Category:</span> {selectedCategory?.name}</p>
                       <p><span className="font-medium">Type:</span> {selectedReason.name}</p>
                       <p><span className="font-medium">Amount:</span> ₹{watchedAmount?.toLocaleString() || 0}</p>
+                      <p><span className="font-medium">Transaction:</span>{' '}
+                        <span className={watchedTransactionType === 'credit' ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
+                          {watchedTransactionType === 'credit' ? '+ Credit' : '- Debit'}
+                        </span>
+                      </p>
                     </div>
                   </div>
 

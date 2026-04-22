@@ -79,6 +79,7 @@ export interface Transaction {
 
 export interface CreateTransaction {
   amount: number;
+  transactionType?: 'debit' | 'credit';
   notes?: string;
   transactionDate: string;
   expenseReasonId: number;
@@ -103,6 +104,7 @@ export interface GmailTransaction {
   transactionDate?: string;
   amount?: number;
   transactionType?: 'debited' | 'credited' | 'unknown';
+  cardType?: 'debit' | 'credit';
   merchant?: string;
   expenseReasonId?: number;
   isClassifiedReason: boolean;

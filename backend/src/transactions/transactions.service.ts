@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, In } from 'typeorm';
 import { google } from 'googleapis';
 import { Transaction } from '../entities/transaction.entity';
 import { BudgetAllocation } from '../entities/budget-allocation.entity';
@@ -51,8 +51,10 @@ export class TransactionsService {
 
     const savedTransaction = await this.transactionRepository.save(transaction);
 
+    const txType = createTransactionDto.transactionType || 'debit';
+    const amountChange = txType === 'credit' ? -createTransactionDto.amount : createTransactionDto.amount;
     // Update budget allocation spent amount
-    await this.updateBudgetAllocation(userId, createTransactionDto.expenseReasonId, month, year, createTransactionDto.amount , "");
+    await this.updateBudgetAllocation(userId, createTransactionDto.expenseReasonId, month, year, amountChange, txType);
 
     return this.findOne(savedTransaction.id);
   }
@@ -100,6 +102,10 @@ export class TransactionsService {
 
   private parseGmailTransaction(snippet: string, rawDate?: string) {
     const snippetLower = (snippet || '').toLowerCase();
+
+    // Detect if this is a credit card transaction
+    const isCreditCard = snippetLower.includes('credit card');
+    const cardType: 'debit' | 'credit' = isCreditCard ? 'credit' : 'debit';
     
     // Debit: explicitly "debited" or "deducted from your account"
     const isDebited = snippetLower.includes('debited') || snippetLower.includes('deducted');
@@ -134,6 +140,7 @@ export class TransactionsService {
       amount,
       transactionType: transactionType as 'debited' | 'credited' | 'unknown',
       transactionDate,
+      cardType,
     };
   }
 
@@ -241,6 +248,7 @@ export class TransactionsService {
         transactionDate: parsed.transactionDate,
         amount: parsed.amount,
         transactionType: parsed.transactionType,
+        cardType: parsed.cardType,
         isClassifiedReason: false,
         isRejected: false,
       });
@@ -259,7 +267,7 @@ export class TransactionsService {
 
   async getPendingGmailTransactions(userId: number) {
     return this.gmailTransactionRepository.find({
-      where: { userId, isRejected: false, isClassifiedReason: false },
+      where: { userId, isRejected: false, isClassifiedReason: false, cardType: 'debit', transactionType: In(['debited', 'credited']) },
       order: { createdAt: 'DESC' },
     });
   }
