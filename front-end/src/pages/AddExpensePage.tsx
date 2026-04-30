@@ -82,11 +82,12 @@ export const AddExpensePage: React.FC = () => {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
         transactionsData.forEach(transaction => {
-          reasonUsage[transaction.expenseReasonId] = (reasonUsage[transaction.expenseReasonId] || 0) + 1;
-          
-          const transactionDate = new Date(transaction.transactionDate);
-          if (transactionDate >= thirtyDaysAgo) {
-            recentReasonIds.add(transaction.expenseReasonId);
+          if (transaction.expenseReasonId) {
+            reasonUsage[transaction.expenseReasonId] = (reasonUsage[transaction.expenseReasonId] || 0) + 1;
+            const transactionDate = new Date(transaction.transactionDate);
+            if (transactionDate >= thirtyDaysAgo) {
+              recentReasonIds.add(transaction.expenseReasonId);
+            }
           }
         });
 

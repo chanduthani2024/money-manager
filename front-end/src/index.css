@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* react-day-picker range styles */
+.rdp-day_selected,
+.rdp-day_range_start,
+.rdp-day_range_end {
+  background-color: #6366f1 !important;
+  color: #fff !important;
+  border-radius: 50% !important;
+}
+.rdp-day_range_middle {
+  background-color: #e0e7ff !important;
+  color: #3730a3 !important;
+  border-radius: 0 !important;
+}
+.rdp-day:hover:not(.rdp-day_selected):not(.rdp-day_range_middle) {
+  background-color: #e0e7ff !important;
+  border-radius: 50% !important;
+}
+.rdp-button:focus-visible {
+  outline: 2px solid #6366f1 !important;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',

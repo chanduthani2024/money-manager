@@ -58,4 +58,12 @@ export const transactionService = {
   async rejectGmailTransaction(id: number): Promise<void> {
     return apiClient.post<void>(`/transactions/gmail-transactions/${id}/reject`);
   },
+
+  async getUncategorized(): Promise<Transaction[]> {
+    return apiClient.get<Transaction[]>('/transactions/uncategorized');
+  },
+
+  async assignExpenseReason(id: number, expenseReasonId: number, notes?: string): Promise<Transaction> {
+    return apiClient.patch<Transaction>(`/transactions/${id}/assign-reason`, { expenseReasonId, notes });
+  },
 };

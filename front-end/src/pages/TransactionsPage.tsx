@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { transactionService } from '../services/transactions';
 import { categoryService, expenseReasonService } from '../services/categories';
+import { budgetService } from '../services/budget';
 import { Transaction, Category, ExpenseReason, GmailTransaction } from '../types/budget';
 import { toast } from 'react-hot-toast';
 import { 
@@ -17,6 +18,7 @@ import {
   Target
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { DateRangePicker } from '../components/common/DateRangePicker';
 
 interface TransactionFilters {
   month?: number;
@@ -24,6 +26,8 @@ interface TransactionFilters {
   categoryId?: number;
   expenseReasonId?: number;
   search?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export const TransactionsPage: React.FC = () => {
@@ -44,6 +48,13 @@ export const TransactionsPage: React.FC = () => {
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [selectedReasonForNotes, setSelectedReasonForNotes] = useState<ExpenseReason | null>(null);
   const [transactionNotes, setTransactionNotes] = useState('');
+  const [classifyMode, setClassifyMode] = useState<'gmail' | 'assign'>('gmail');
+  const [uncategorizedTransactions, setUncategorizedTransactions] = useState<Transaction[]>([]);
+  const UNCATEGORIZED_PAGE_SIZE = 5;
+  const [uncategorizedPage, setUncategorizedPage] = useState(1);
+  const [uncategorizedMonthFilter, setUncategorizedMonthFilter] = useState<number | undefined>(new Date().getMonth() + 1);
+  const [uncategorizedYearFilter, setUncategorizedYearFilter] = useState<number | undefined>(new Date().getFullYear());
+  const [monthlyBudgetSalary, setMonthlyBudgetSalary] = useState<number | null>(null);
 
   const fetchPendingGmailTransactions = async () => {
     try {
@@ -51,6 +62,16 @@ export const TransactionsPage: React.FC = () => {
       setPendingGmailTransactions(data);
     } catch (error) {
       toast.error('Failed to load pending Gmail transactions');
+    }
+  };
+
+  const fetchUncategorizedTransactions = async () => {
+    try {
+      const data = await transactionService.getUncategorized();
+      setUncategorizedTransactions(data);
+      setUncategorizedPage(1);
+    } catch (error) {
+      console.error('Failed to load uncategorized transactions', error);
     }
   };
 
@@ -64,6 +85,7 @@ export const TransactionsPage: React.FC = () => {
       setCategories(categoriesData);
       setExpenseReasons(expenseReasonsData);
       await fetchPendingGmailTransactions();
+      await fetchUncategorizedTransactions();
     } catch (error) {
       toast.error('Failed to load data');
     }
@@ -78,7 +100,17 @@ export const TransactionsPage: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const data = await transactionService.getAll(filters);
+        // Strip search from API params — it's applied client-side
+        const { search: _search, ...apiFilters } = filters;
+        const [data] = await Promise.all([
+          transactionService.getAll(apiFilters),
+          // Fetch monthly budget salary for opening balance when a specific month/year is selected
+          (filters.month && filters.year
+            ? budgetService.getByMonthYear(filters.month, filters.year)
+                .then(b => { setMonthlyBudgetSalary(Number(b.salary)); })
+                .catch(() => { setMonthlyBudgetSalary(null); })
+            : Promise.resolve(setMonthlyBudgetSalary(null))),
+        ]);
         setTransactions(data);
       } catch (error) {
         toast.error('Failed to fetch transactions');
@@ -93,7 +125,8 @@ export const TransactionsPage: React.FC = () => {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      const data = await transactionService.getAll(filters);
+      const { search: _search, ...apiFilters } = filters;
+      const data = await transactionService.getAll(apiFilters);
       setTransactions(data);
     } catch (error) {
       toast.error('Failed to fetch transactions');
@@ -153,9 +186,18 @@ export const TransactionsPage: React.FC = () => {
     }).format(amount);
   };
 
-  // Open reason selector modal
+  // Open reason selector modal for Gmail transaction classification
   const openReasonSelector = (transactionId: number) => {
     setCurrentTransactionId(transactionId);
+    setClassifyMode('gmail');
+    setShowReasonSelector(true);
+    setSearchTerm('');
+  };
+
+  // Open reason selector modal for assigning reason to uncategorized transaction
+  const openReasonSelectorForAssign = (transactionId: number) => {
+    setCurrentTransactionId(transactionId);
+    setClassifyMode('assign');
     setShowReasonSelector(true);
     setSearchTerm('');
   };
@@ -179,17 +221,27 @@ export const TransactionsPage: React.FC = () => {
     if (!selectedReasonForNotes || currentTransactionId < 0) return;
 
     try {
-      await transactionService.classifyGmailTransaction(
-        currentTransactionId, 
-        selectedReasonForNotes.id, 
-        transactionNotes.trim() || undefined
-      );
-      toast.success('Email transaction classified successfully');
+      if (classifyMode === 'gmail') {
+        await transactionService.classifyGmailTransaction(
+          currentTransactionId,
+          selectedReasonForNotes.id,
+          transactionNotes.trim() || undefined
+        );
+        toast.success('Email transaction classified successfully');
+        fetchPendingGmailTransactions();
+      } else {
+        await transactionService.assignExpenseReason(
+          currentTransactionId,
+          selectedReasonForNotes.id,
+          transactionNotes.trim() || undefined
+        );
+        toast.success('Expense reason assigned successfully');
+        fetchUncategorizedTransactions();
+      }
       closeNotesModal();
-      fetchPendingGmailTransactions();
       fetchTransactions();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to classify email transaction');
+      toast.error(error.response?.data?.message || 'Failed to classify transaction');
     }
   };
 
@@ -270,14 +322,42 @@ export const TransactionsPage: React.FC = () => {
     return transactions.length > 0 ? total / transactions.length : 0;
   };
 
-  const groupedTransactions = transactions.reduce((acc, transaction) => {
+  const searchLower = (filters.search || '').toLowerCase();
+  const visibleTransactions = transactions.filter(t => {
+    if (searchLower && !(t.expenseReason?.name.toLowerCase().includes(searchLower) ||
+        t.category?.name.toLowerCase().includes(searchLower) ||
+        t.notes?.toLowerCase().includes(searchLower))) return false;
+    if (filters.dateFrom && t.transactionDate.split('T')[0] < filters.dateFrom) return false;
+    if (filters.dateTo && t.transactionDate.split('T')[0] > filters.dateTo) return false;
+    return true;
+  });
+
+  // Compute running closing balance — sort oldest→newest, apply each transaction, then reverse for display
+  type TransactionWithBalance = Transaction & { closingBalance: number };
+  const transactionsWithBalance: TransactionWithBalance[] = (() => {
+    if (!visibleTransactions.length) return [];
+    const sorted = [...visibleTransactions].sort((a, b) => {
+      const dateA = new Date(a.transactionDate.split('T')[0] + 'T00:00:00').getTime();
+      const dateB = new Date(b.transactionDate.split('T')[0] + 'T00:00:00').getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+    let balance = monthlyBudgetSalary ?? 0;
+    return sorted.map(tx => {
+      const amt = typeof tx.amount === 'string' ? parseFloat(tx.amount) : tx.amount;
+      balance = tx.transactionType === 'credit' ? balance + amt : balance - amt;
+      return { ...tx, closingBalance: balance };
+    });
+  })();
+
+  const groupedTransactions = transactionsWithBalance.reduce((acc, transaction) => {
     const date = transaction.transactionDate.split('T')[0];
     if (!acc[date]) {
       acc[date] = [];
     }
     acc[date].push(transaction);
     return acc;
-  }, {} as Record<string, Transaction[]>);
+  }, {} as Record<string, TransactionWithBalance[]>);
 
   const filteredReasons = filters.categoryId 
     ? expenseReasons.filter(reason => reason.categoryId === filters.categoryId)
@@ -303,6 +383,7 @@ export const TransactionsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Pending Bank Email Transactions */}
       {pendingGmailTransactions.length > 0 && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -434,18 +515,162 @@ export const TransactionsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Uncategorized Transactions — auto-imported from Gmail, needs expense reason */}
+      {uncategorizedTransactions.length > 0 && (() => {
+        const filteredUncategorized = uncategorizedTransactions.filter(tx => {
+          if (!tx.transactionDate) return true;
+          const d = new Date(tx.transactionDate + 'T00:00:00');
+          if (uncategorizedMonthFilter && d.getMonth() + 1 !== uncategorizedMonthFilter) return false;
+          if (uncategorizedYearFilter && d.getFullYear() !== uncategorizedYearFilter) return false;
+          return true;
+        });
+        const totalPages = Math.ceil(filteredUncategorized.length / UNCATEGORIZED_PAGE_SIZE);
+        const pageItems = filteredUncategorized.slice((uncategorizedPage - 1) * UNCATEGORIZED_PAGE_SIZE, uncategorizedPage * UNCATEGORIZED_PAGE_SIZE);
+        return (
+        <div className="card border-l-4 border-l-orange-400">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">🏷️ Needs Categorization</h2>
+              <p className="text-sm text-gray-500">
+                {filteredUncategorized.length} of {uncategorizedTransactions.length} transaction{uncategorizedTransactions.length !== 1 ? 's' : ''} shown
+              </p>
+            </div>
+            {/* Month / Year filter */}
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={uncategorizedMonthFilter ?? ''}
+                onChange={(e) => { setUncategorizedMonthFilter(e.target.value ? parseInt(e.target.value) : undefined); setUncategorizedPage(1); }}
+                className="form-input py-1.5 text-sm"
+              >
+                <option value="">All Months</option>
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {new Date(2000, i, 1).toLocaleString('default', { month: 'short' })}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={uncategorizedYearFilter ?? ''}
+                onChange={(e) => { setUncategorizedYearFilter(e.target.value ? parseInt(e.target.value) : undefined); setUncategorizedPage(1); }}
+                className="form-input py-1.5 text-sm"
+              >
+                <option value="">All Years</option>
+                {Array.from({ length: 5 }, (_, i) => {
+                  const y = new Date().getFullYear() - 2 + i;
+                  return <option key={y} value={y}>{y}</option>;
+                })}
+              </select>
+            </div>
+          </div>
+
+          {filteredUncategorized.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">No transactions for the selected period.</p>
+          ) : (
+          <div className="space-y-3">
+            {pageItems.map((tx) => {
+              const istDate = new Date(new Date(tx.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+              const formattedDate = tx.transactionDate
+                ? new Date(tx.transactionDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })
+                : 'No date';
+              const formattedTime = format(istDate, 'h:mm a');
+              const formattedCreatedDate = format(istDate, 'MMM d, yyyy');
+              const amountFormatted = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(tx.amount);
+              return (
+                <div key={tx.id} className="border border-orange-200 bg-orange-50 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-700 font-medium">{formattedDate}</p>
+                    <p className="text-xs text-gray-500">{formattedTime} • {formattedCreatedDate}</p>
+                    {tx.notes && <p className="text-sm text-gray-600 mt-1">{tx.notes}</p>}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className={`text-lg font-bold ${tx.transactionType === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                      {tx.transactionType === 'credit' ? '+' : '-'}{amountFormatted}
+                    </span>
+                    <button
+                      onClick={() => openReasonSelectorForAssign(tx.id)}
+                      className="btn btn-primary btn-sm whitespace-nowrap"
+                    >
+                      Assign Category
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          )}
+
+          {/* Pagination */}
+          {filteredUncategorized.length > UNCATEGORIZED_PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-orange-200">
+              <p className="text-sm text-gray-500">
+                Showing {Math.min((uncategorizedPage - 1) * UNCATEGORIZED_PAGE_SIZE + 1, filteredUncategorized.length)}–{Math.min(uncategorizedPage * UNCATEGORIZED_PAGE_SIZE, filteredUncategorized.length)} of {filteredUncategorized.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setUncategorizedPage(p => Math.max(1, p - 1))}
+                  disabled={uncategorizedPage === 1}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ← Prev
+                </button>
+                <span className="text-sm text-gray-700 font-medium">
+                  {uncategorizedPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setUncategorizedPage(p => Math.min(totalPages, p + 1))}
+                  disabled={uncategorizedPage >= totalPages}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        );
+      })()}
+
       {/* Filters */}
       {showFilters && (
         <div className="card">
           <h3 className="font-semibold mb-4">Filter Transactions</h3>
+
+          {/* Date Range picker */}
+          <div className="mb-4">
+            <label className="form-label">Date Range</label>
+            <DateRangePicker
+              dateFrom={filters.dateFrom}
+              dateTo={filters.dateTo}
+              onChange={(from, to) => setFilters(prev => ({
+                ...prev,
+                dateFrom: from,
+                dateTo: to,
+                // clear month/year when using date range
+                month: from ? undefined : prev.month,
+                year: from ? undefined : prev.year,
+              }))}
+              placeholder="Pick a date range"
+            />
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400 uppercase tracking-wide">or filter by month / year</span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="form-label">Month</label>
               <select
                 value={filters.month || ''}
-                onChange={(e) => setFilters(prev => ({ 
-                  ...prev, 
-                  month: e.target.value ? parseInt(e.target.value) : undefined 
+                onChange={(e) => setFilters(prev => ({
+                  ...prev,
+                  month: e.target.value ? parseInt(e.target.value) : undefined,
+                  // clear date range when using month/year
+                  dateFrom: e.target.value ? undefined : prev.dateFrom,
+                  dateTo: e.target.value ? undefined : prev.dateTo,
                 }))}
                 className="form-input"
               >
@@ -462,9 +687,11 @@ export const TransactionsPage: React.FC = () => {
               <label className="form-label">Year</label>
               <select
                 value={filters.year || ''}
-                onChange={(e) => setFilters(prev => ({ 
-                  ...prev, 
-                  year: e.target.value ? parseInt(e.target.value) : undefined 
+                onChange={(e) => setFilters(prev => ({
+                  ...prev,
+                  year: e.target.value ? parseInt(e.target.value) : undefined,
+                  dateFrom: e.target.value ? undefined : prev.dateFrom,
+                  dateTo: e.target.value ? undefined : prev.dateTo,
                 }))}
                 className="form-input"
               >
@@ -487,7 +714,7 @@ export const TransactionsPage: React.FC = () => {
                 onChange={(e) => setFilters(prev => ({ 
                   ...prev, 
                   categoryId: e.target.value ? parseInt(e.target.value) : undefined,
-                  expenseReasonId: undefined // Reset expense reason when category changes
+                  expenseReasonId: undefined
                 }))}
                 className="form-input"
               >
@@ -633,16 +860,16 @@ export const TransactionsPage: React.FC = () => {
                   </h3>
                   
                   <div className="space-y-2">
-                    {dayTransactions.map((transaction) => (
+                    {[...dayTransactions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((transaction) => (
                       <div key={transaction.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3 mb-2">
                               <h4 className="font-medium text-gray-900">
-                                {transaction.expenseReason.name}
+                                {transaction.expenseReason?.name || 'Uncategorized'}
                               </h4>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(transaction.category.type)}`}>
-                                {transaction.category.name}
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(transaction.category?.type || 'needs')}`}>
+                                {transaction.category?.name || '—'}
                               </span>
                             </div>
                             
@@ -667,6 +894,14 @@ export const TransactionsPage: React.FC = () => {
                                   -{formatCurrency(transaction.amount)}
                                 </p>
                               )}
+                              <p className={`text-xs mt-0.5 font-medium ${
+                                monthlyBudgetSalary !== null
+                                  ? (transaction.closingBalance < 0 ? 'text-red-500' : 'text-gray-400')
+                                  : 'text-gray-300'
+                              }`}>
+                                Bal: {formatCurrency(transaction.closingBalance)}
+                                {monthlyBudgetSalary === null && ' (est.)'}
+                              </p>
                             </div>
                             
                             <div className="flex items-center space-x-2">
@@ -871,20 +1106,26 @@ export const TransactionsPage: React.FC = () => {
                   <div className="text-right">
                     <div className="text-lg font-bold text-gray-900">
                       {(() => {
-                        const transaction = pendingGmailTransactions.find(t => t.id === currentTransactionId);
-                        return transaction?.amount ? new Intl.NumberFormat('en-IN', { 
+                        const amount = classifyMode === 'gmail'
+                          ? pendingGmailTransactions.find(t => t.id === currentTransactionId)?.amount
+                          : uncategorizedTransactions.find(t => t.id === currentTransactionId)?.amount;
+                        return amount ? new Intl.NumberFormat('en-IN', { 
                           style: 'currency', 
                           currency: 'INR',
                           minimumFractionDigits: 0,
                           maximumFractionDigits: 0
-                        }).format(transaction.amount) : 'Amount unavailable';
+                        }).format(amount) : 'Amount unavailable';
                       })()}
                     </div>
                     <div className="text-xs text-gray-500 uppercase tracking-wide">
                       {(() => {
-                        const transaction = pendingGmailTransactions.find(t => t.id === currentTransactionId);
-                        return transaction?.transactionType === 'debited' ? 'Debited' : 
-                               transaction?.transactionType === 'credited' ? 'Credited' : 'Unknown';
+                        const txType = classifyMode === 'gmail'
+                          ? pendingGmailTransactions.find(t => t.id === currentTransactionId)?.transactionType
+                          : uncategorizedTransactions.find(t => t.id === currentTransactionId)?.transactionType;
+                        if (classifyMode === 'gmail') {
+                          return txType === 'debited' ? 'Debited' : txType === 'credited' ? 'Credited' : 'Unknown';
+                        }
+                        return txType === 'credit' ? 'Credit' : 'Debit';
                       })()}
                     </div>
                   </div>

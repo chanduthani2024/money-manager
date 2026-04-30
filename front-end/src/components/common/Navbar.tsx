@@ -26,7 +26,7 @@ export const Navbar: React.FC = () => {
     { to: '/budget', icon: IndianRupee, label: 'Budget' },
     { to: '/add-expense', icon: Plus, label: 'Add Expense' },
     { to: '/transactions', icon: Calendar, label: 'Transactions' },
-    { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+    // { to: '/analytics', icon: BarChart3, label: 'Analytics' },
     { to: '/categories', icon: Settings, label: 'Categories' },
   ];
 

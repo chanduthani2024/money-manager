@@ -83,6 +83,7 @@ export class DashboardService {
       .where('transaction.userId = :userId', { userId })
       .andWhere('transaction.month = :month', { month })
       .andWhere('transaction.year = :year', { year })
+      .andWhere('transaction.expenseReasonId IS NOT NULL')
       .groupBy('expenseReason.id, expenseReason.name')
       .orderBy('SUM(transaction.amount)', 'DESC')
       .limit(1)

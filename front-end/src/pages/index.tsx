@@ -27,14 +27,14 @@ export const TransactionsPage: React.FC = () => {
   );
 };
 
-export const AnalyticsPage: React.FC = () => {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Analytics</h1>
-      <p>Charts and analytics - To be implemented</p>
-    </div>
-  );
-};
+// export const AnalyticsPage: React.FC = () => {
+//   return (
+//     <div>
+//       <h1 className="text-2xl font-bold mb-6">Analytics</h1>
+//       <p>Charts and analytics - To be implemented</p>
+//     </div>
+//   );
+// };
 
 export const CategoriesPage: React.FC = () => {
   return (

@@ -254,7 +254,7 @@ DATABASE_HOST=localhost
 DATABASE_PORT=5432
 DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=chandu
-DATABASE_NAME=money_manager_test
+DATABASE_NAME=money_manager_test_one
 JWT_SECRET=your-secret-key
 ```
 

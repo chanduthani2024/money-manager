@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn, Unique } from 'typeorm';
 import { ExpenseReason } from './expense-reason.entity';
 import { User } from './user.entity';
 
@@ -9,11 +9,12 @@ export enum CategoryType {
 }
 
 @Entity('categories')
+@Unique(['name', 'userId'])
 export class Category {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ unique: true })
+  @Column()
   name: string;
 
   @Column({

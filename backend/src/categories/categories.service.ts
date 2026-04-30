@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category, CategoryType } from '../entities/category.entity';
@@ -16,7 +16,14 @@ export class CategoriesService {
       ...createCategoryDto,
       userId,
     });
-    return this.categoryRepository.save(category);
+    try {
+      return await this.categoryRepository.save(category);
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        throw new ConflictException(`Category "${createCategoryDto.name}" already exists`);
+      }
+      throw err;
+    }
   }
 
   async findAll(userId: number): Promise<Category[]> {

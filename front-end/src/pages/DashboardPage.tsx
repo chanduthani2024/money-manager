@@ -86,6 +86,7 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setSyncLoading(false);
     }
+    fetchDashboardData();
   };
 
   const formatCurrency = (amount: number) => {
@@ -485,7 +486,7 @@ export const DashboardPage: React.FC = () => {
             {dashboardData.categorySpending.map((category, index) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(category.categoryType)}`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(category.categoryType || '')}`}>
                     {category.categoryName}
                   </span>
                   <span className="text-sm text-gray-600">

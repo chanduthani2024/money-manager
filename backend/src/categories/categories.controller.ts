@@ -15,6 +15,8 @@ export class CategoriesController {
 
   @Get()
   findAll(@Req() req) {
+    console.log('Fetching categories for user:', req.user.id);
+    console.log('Fetching categories for user:', this.categoriesService.findAll(req.user.id));
     return this.categoriesService.findAll(req.user.id);
   }
 

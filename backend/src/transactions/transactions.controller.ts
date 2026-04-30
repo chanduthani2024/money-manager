@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, Patch, UseGuards, Request, Query } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto, UpdateTransactionDto, GmailSyncDto, ClassifyGmailTransactionDto } from './dto/transaction.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -57,6 +57,20 @@ export class TransactionsController {
   @Get('category-spending/:month/:year')
   getCategorySpending(@Request() req, @Param('month') month: string, @Param('year') year: string) {
     return this.transactionsService.getCategorySpending(req.user.id, parseInt(month), parseInt(year));
+  }
+
+  @Get('uncategorized')
+  getUncategorizedTransactions(@Request() req) {
+    return this.transactionsService.getUncategorizedTransactions(req.user.id);
+  }
+
+  @Patch(':id/assign-reason')
+  assignExpenseReason(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: { expenseReasonId: number; notes?: string },
+  ) {
+    return this.transactionsService.assignExpenseReason(req.user.id, +id, body.expenseReasonId, body.notes);
   }
 
   @Get(':id')

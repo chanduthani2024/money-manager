@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
+import { Repository, Between, In, IsNull } from 'typeorm';
 import { google } from 'googleapis';
 import { Transaction } from '../entities/transaction.entity';
 import { BudgetAllocation } from '../entities/budget-allocation.entity';
@@ -156,6 +156,7 @@ export class TransactionsService {
 
     const startDate = new Date(syncDto.startDate);
     const endDate = new Date(syncDto.endDate);
+    console.log(`Starting Gmail sync for user ${userId} | Start: ${startDate} | End: ${endDate}`);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       throw new BadRequestException('Invalid date range');
@@ -173,13 +174,24 @@ export class TransactionsService {
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const query = this.buildGmailQuery(startDate, endDate);
+    console.log(`Gmail sync query: "${query}"`);
 
-    const listResponse = await gmail.users.messages.list({
-      userId: 'me',
-      q: query,
-      maxResults: 100,
-    });
-    const messages = listResponse.data.messages || [];
+    // Paginate through all matching messages (Gmail returns max 500 per page, newest first)
+    const allMessages: { id?: string; threadId?: string }[] = [];
+    let pageToken: string | undefined = undefined;
+    do {
+      const listResponse = await gmail.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults: 500,
+        ...(pageToken ? { pageToken } : {}),
+      });
+      const page = listResponse.data.messages || [];
+      allMessages.push(...page);
+      pageToken = listResponse.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    console.log(`Total emails found: ${allMessages.length}`);
+    const messages = allMessages;
     const emails = await Promise.all(messages.map(async (messageMeta) => {
       const message = await gmail.users.messages.get({
         userId: 'me',
@@ -194,12 +206,13 @@ export class TransactionsService {
         }
         return acc;
       }, {} as Record<string, string>);
-
+      console.log(`Processing email: ${messageMeta.id} | Subject: "${headerMap.subject}" | From: "${headerMap.from}" | Date: "${headerMap.date}"`);
       const subject = headerMap.subject || '';
       const from = headerMap.from || '';
       const date = headerMap.date || '';
       const body = this.decodeMessageBody(message.data.payload);
       const snippet = message.data.snippet || '';
+      console.log(`Fetched email: ${messageMeta.id} | Subject: "${subject}" | From: "${from}" | Date: "${date}" | Snippet: "${snippet}"`);
 
       return {
         messageId: messageMeta.id,
@@ -255,8 +268,53 @@ export class TransactionsService {
       gmailTransactions.push(gmailTransaction);
     }
 
+    let savedGmailTransactions: GmailTransaction[] = [];
     if (gmailTransactions.length > 0) {
-      await this.gmailTransactionRepository.save(gmailTransactions);
+      savedGmailTransactions = await this.gmailTransactionRepository.save(gmailTransactions);
+    }
+
+    // Auto-create Transaction records for valid gmail transactions (debited/credited, debit card)
+    for (const gmailTx of savedGmailTransactions) {
+      if (
+        (gmailTx.transactionType === 'debited' || gmailTx.transactionType === 'credited') &&
+        gmailTx.cardType === 'debit' &&
+        gmailTx.amount !== null
+      ) {
+        let transactionDate: Date;
+        if (gmailTx.transactionDate) {
+          const d = new Date(gmailTx.transactionDate);
+          transactionDate = isNaN(d.getTime()) ? new Date() : d;
+        } else {
+          transactionDate = new Date();
+        }
+        const istDate = new Date(transactionDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const month = istDate.getMonth() + 1;
+        const year = istDate.getFullYear();
+        const txType: 'debit' | 'credit' = gmailTx.transactionType === 'credited' ? 'credit' : 'debit';
+
+        const newTransaction = this.transactionRepository.create({
+          amount: Number(gmailTx.amount),
+          transactionType: txType,
+          userId,
+          transactionDate,
+          month,
+          year,
+          createdAt: gmailTx.rawDate ? new Date(gmailTx.rawDate) : new Date(),
+        });
+        const savedTransaction = await this.transactionRepository.save(newTransaction);
+
+        // Ensure a monthly budget exists for this month/year; auto-create via carry-forward if needed
+        await this.ensureMonthlyBudgetExists(userId, month, year);
+
+        // Update monthly budget totalSpent immediately (no expenseReason yet, so allocation is skipped)
+        const amountChange = txType === 'credit' ? -Number(gmailTx.amount) : Number(gmailTx.amount);
+        await this.updateBudgetAllocation(userId, null, month, year, amountChange, txType);
+
+        // Link gmail transaction to the created transaction and mark as classified
+        gmailTx.transactionId = savedTransaction.id;
+        gmailTx.isClassifiedReason = true;
+        await this.gmailTransactionRepository.save(gmailTx);
+      }
     }
 
     user.lastGmailSync = new Date();
@@ -444,48 +502,109 @@ export class TransactionsService {
   async remove(id: number): Promise<void> {
     const transaction = await this.findOne(id);
     await this.transactionRepository.delete(id);
-    // Subtract amount from budget allocation
+    // Always reverse totalSpent; also reverse allocation if expense reason was assigned
     await this.updateBudgetAllocation(
       transaction.userId,
-      transaction.expenseReasonId,
+      transaction.expenseReasonId,  // null-safe: skips allocation when null
       transaction.month,
       transaction.year,
       -Number(transaction.amount),
-      ""
+      transaction.transactionType
     );
+  }
+
+  async getUncategorizedTransactions(userId: number): Promise<Transaction[]> {
+    return this.transactionRepository.find({
+      where: { userId, expenseReasonId: IsNull() },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async assignExpenseReason(
+    userId: number,
+    transactionId: number,
+    expenseReasonId: number,
+    notes?: string,
+  ): Promise<Transaction> {
+    const transaction = await this.transactionRepository.findOne({ where: { id: transactionId, userId } });
+    if (!transaction) throw new BadRequestException('Transaction not found');
+    if (transaction.expenseReasonId) throw new BadRequestException('Transaction already has an expense reason assigned');
+
+    const expenseReason = await this.expenseReasonsService.findOne(userId, expenseReasonId);
+    if (!expenseReason) throw new BadRequestException('Expense reason not found or unauthorized');
+
+    transaction.expenseReasonId = expenseReasonId;
+    transaction.categoryId = expenseReason.categoryId;
+    if (notes) transaction.notes = notes;
+    await this.transactionRepository.save(transaction);
+
+    // Update allocation.spentAmount only — totalSpent was already updated at sync time
+    const txType = transaction.transactionType;
+    const amountChange = txType === 'credit' ? -Number(transaction.amount) : Number(transaction.amount);
+    await this.updateBudgetAllocation(userId, expenseReasonId, transaction.month, transaction.year, amountChange, txType, true);
+
+    // Update linked gmail transaction expenseReasonId if exists
+    const gmailTx = await this.gmailTransactionRepository.findOne({ where: { transactionId, userId } });
+    if (gmailTx) {
+      gmailTx.expenseReasonId = expenseReasonId;
+      await this.gmailTransactionRepository.save(gmailTx);
+    }
+
+    return this.findOne(transactionId);
+  }
+
+  private async ensureMonthlyBudgetExists(userId: number, month: number, year: number): Promise<void> {
+    const existing = await this.monthlyBudgetsService.findByMonthYearOptional(userId, month, year);
+    if (existing) return;
+
+    // No budget for this month — find the most recent previous month's budget
+    const previous = await this.monthlyBudgetsService.findMostRecentBefore(userId, month, year);
+    if (!previous) {
+      throw new BadRequestException(
+        `No budget data found before ${month}/${year}. Please create a budget manually for this month first.`
+      );
+    }
+
+    // Carry-forward salary = previous salary − previous totalSpent (remaining balance)
+    const carryForwardSalary = Number(previous.salary) - Number(previous.totalSpent);
+    await this.monthlyBudgetsService.createCarryForward(userId, month, year, carryForwardSalary);
   }
 
   private async updateBudgetAllocation(
     userId: number,
-    expenseReasonId: number,
+    expenseReasonId: number | null,
     month: number,
     year: number,
     amountChange: number,
-    transactionType: string
+    transactionType: string,
+    skipTotalSpent = false,
   ): Promise<void> {
     const monthlyBudget = await this.monthlyBudgetsService.findByMonthYear(userId, month, year);
     
     if (monthlyBudget) {
-      const allocation = await this.budgetAllocationRepository.findOne({
-        where: {
-          monthlyBudgetId: monthlyBudget.id,
-          expenseReasonId,
-        },
-      });
+      // Only update allocation if we have an expense reason
+      if (expenseReasonId) {
+        const allocation = await this.budgetAllocationRepository.findOne({
+          where: {
+            monthlyBudgetId: monthlyBudget.id,
+            expenseReasonId,
+          },
+        });
 
-      if (allocation) {
-        // Update the specific budget allocation if it exists
-        if (transactionType === 'credit') {
-          allocation.allocatedAmount = Number(allocation.allocatedAmount) - amountChange; 
+        if (allocation) {
+          if (transactionType === 'credit') {
+            allocation.allocatedAmount = Number(allocation.allocatedAmount) - amountChange; 
+          } else {
+            allocation.spentAmount = Number(allocation.spentAmount) + amountChange;
+          }
+          await this.budgetAllocationRepository.save(allocation);
         }
-        else{
-          allocation.spentAmount = Number(allocation.spentAmount) + amountChange;
-        }
-        await this.budgetAllocationRepository.save(allocation);
       }
 
-      // Always update monthly budget total spent, regardless of whether allocation exists
-      await this.monthlyBudgetsService.updateTotalSpent(monthlyBudget.id , transactionType , amountChange);
+      // Update monthly budget total spent unless caller says to skip it
+      if (!skipTotalSpent) {
+        await this.monthlyBudgetsService.updateTotalSpent(monthlyBudget.id, transactionType, amountChange);
+      }
     }
   }
 
@@ -512,6 +631,7 @@ export class TransactionsService {
       .where('transaction.userId = :userId', { userId })
       .andWhere('transaction.month = :month', { month })
       .andWhere('transaction.year = :year', { year })
+      .andWhere('transaction.categoryId IS NOT NULL')
       .groupBy('category.id, category.name, category.type')
       .getRawMany();
   }

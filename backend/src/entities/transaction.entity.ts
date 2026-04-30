@@ -43,13 +43,13 @@ export class Transaction {
   @JoinColumn({ name: 'expenseReasonId' })
   expenseReason: ExpenseReason;
 
-  @Column()
-  expenseReasonId: number;
+  @Column({ nullable: true })
+  expenseReasonId: number | null;
 
   @ManyToOne(() => Category)
   @JoinColumn({ name: 'categoryId' })
   category: Category;
 
-  @Column()
-  categoryId: number;
+  @Column({ nullable: true })
+  categoryId: number | null;
 }

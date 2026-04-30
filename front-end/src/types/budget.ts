@@ -69,10 +69,10 @@ export interface Transaction {
   month: number;
   year: number;
   userId: number;
-  expenseReasonId: number;
-  categoryId: number;
-  expenseReason: ExpenseReason;
-  category: Category;
+  expenseReasonId: number | null;
+  categoryId: number | null;
+  expenseReason: ExpenseReason | null;
+  category: Category | null;
   createdAt: string;
   updatedAt: string;
 }

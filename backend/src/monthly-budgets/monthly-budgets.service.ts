@@ -106,6 +106,42 @@ export class MonthlyBudgetsService {
     return budget;
   }
 
+  async findByMonthYearOptional(userId: number, month: number, year: number): Promise<MonthlyBudget | null> {
+    return this.monthlyBudgetRepository.findOne({
+      where: { userId, month, year },
+      relations: ['budgetAllocations', 'budgetAllocations.expenseReason'],
+    });
+  }
+
+  async findMostRecentBefore(userId: number, month: number, year: number): Promise<MonthlyBudget | null> {
+    // Find the most recent budget strictly before the given month/year
+    return this.monthlyBudgetRepository
+      .createQueryBuilder('budget')
+      .where('budget.userId = :userId', { userId })
+      .andWhere('(budget.year < :year OR (budget.year = :year AND budget.month < :month))', { year, month })
+      .orderBy('budget.year', 'DESC')
+      .addOrderBy('budget.month', 'DESC')
+      .limit(1)
+      .getOne();
+  }
+
+  async createCarryForward(
+    userId: number,
+    month: number,
+    year: number,
+    salary: number,
+  ): Promise<MonthlyBudget> {
+    const budget = this.monthlyBudgetRepository.create({
+      userId,
+      month,
+      year,
+      salary,
+      totalAllocated: 0,
+      totalSpent: 0,
+    });
+    return this.monthlyBudgetRepository.save(budget);
+  }
+
   async getCurrentMonthBudget(userId: number): Promise<MonthlyBudget | null> {
     const now = new Date();
     const month = now.getMonth() + 1;
