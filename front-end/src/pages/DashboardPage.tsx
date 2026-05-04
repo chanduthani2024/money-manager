@@ -21,7 +21,7 @@ export const DashboardPage: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [syncFromDate, setSyncFromDate] = useState<string>('');
   const [syncToDate, setSyncToDate] = useState<string>('');
-  const [syncMode, setSyncMode] = useState<'7days' | '30days' | 'custom'>('7days');
+  const [syncMode, setSyncMode] = useState<'today' | '7days' | '30days' | 'custom'>('7days');
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncedEmails, setSyncedEmails] = useState<GmailMessage[]>([]);
   const [syncResultAvailable, setSyncResultAvailable] = useState(false);
@@ -51,7 +51,11 @@ export const DashboardPage: React.FC = () => {
     let startDate: string;
     let endDate: string;
 
-    if (syncMode === '7days') {
+    if (syncMode === 'today') {
+      const today = new Date();
+      startDate = today.toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+    } else if (syncMode === '7days') {
       const today = new Date();
       const sevenDaysAgo = new Date(today);
       sevenDaysAgo.setDate(today.getDate() - 7);
@@ -168,6 +172,12 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                  syncMode === 'today' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                }`}>
+                  <input type="radio" name="syncMode" value="today" checked={syncMode === 'today'} onChange={(e) => setSyncMode(e.target.value as 'today')} className="sr-only" />
+                  Today
+                </label>
                 <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
                   syncMode === '7days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
                 }`}>
@@ -301,6 +311,19 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-4">
             {/* Time Period Selection - Horizontal */}
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                syncMode === 'today' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}>
+                <input
+                  type="radio"
+                  name="syncMode"
+                  value="today"
+                  checked={syncMode === 'today'}
+                  onChange={(e) => setSyncMode(e.target.value as 'today')}
+                  className="sr-only"
+                />
+                Today
+              </label>
               <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
                 syncMode === '7days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
               }`}>

@@ -894,14 +894,14 @@ export const TransactionsPage: React.FC = () => {
                                   -{formatCurrency(transaction.amount)}
                                 </p>
                               )}
-                              <p className={`text-xs mt-0.5 font-medium ${
+                              {/* <p className={`text-xs mt-0.5 font-medium ${
                                 monthlyBudgetSalary !== null
                                   ? (transaction.closingBalance < 0 ? 'text-red-500' : 'text-gray-400')
                                   : 'text-gray-300'
                               }`}>
                                 Bal: {formatCurrency(transaction.closingBalance)}
                                 {monthlyBudgetSalary === null && ' (est.)'}
-                              </p>
+                              </p> */}
                             </div>
                             
                             <div className="flex items-center space-x-2">
