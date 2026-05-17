@@ -13,6 +13,7 @@ import {
   BudgetStatus,
   MonthData,
   CategoryChange,
+  TopSpendingReason,
 } from './dto/dashboard.dto';
 
 @Injectable()
@@ -41,8 +42,8 @@ export class DashboardService {
     // Get category spending for current month
     const categorySpending = await this.getCategorySpending(userId, currentMonth, currentYear);
 
-    // Get top spending reason
-    const topSpendingReason = await this.getTopSpendingReason(userId, currentMonth, currentYear);
+    // Get top spending reasons
+    const topSpendingReasons = await this.getTopSpendingReasons(userId, currentMonth, currentYear);
 
     // Get monthly comparison
     const monthlyComparison = await this.getMonthlyComparison(userId, currentMonth, currentYear);
@@ -55,7 +56,7 @@ export class DashboardService {
       totalSpent: Number(monthlyBudget.totalSpent),
       totalRemaining: monthlyBudget.remainingBalance,
       categorySpending,
-      topSpendingReason,
+      topSpendingReasons,
       monthlyComparison,
       budgetStatus,
     };
@@ -74,25 +75,50 @@ export class DashboardService {
     }));
   }
 
-  private async getTopSpendingReason(userId: number, month: number, year: number): Promise<{ name: string; amount: number }> {
-    const result = await this.transactionRepository
+  private async getTopSpendingReasons(userId: number, month: number, year: number): Promise<TopSpendingReason[]> {
+    // innerJoin ensures expenseReason is always present in the result rows
+    const topReasons = await this.transactionRepository
       .createQueryBuilder('transaction')
-      .leftJoin('transaction.expenseReason', 'expenseReason')
-      .select('expenseReason.name', 'name')
+      .innerJoin('transaction.expenseReason', 'expenseReason')
+      .select('expenseReason.id', 'reasonId')
+      .addSelect('expenseReason.name', 'name')
       .addSelect('SUM(transaction.amount)', 'totalAmount')
+      .addSelect('COUNT(transaction.id)', 'transactionCount')
       .where('transaction.userId = :userId', { userId })
       .andWhere('transaction.month = :month', { month })
       .andWhere('transaction.year = :year', { year })
-      .andWhere('transaction.expenseReasonId IS NOT NULL')
       .groupBy('expenseReason.id, expenseReason.name')
       .orderBy('SUM(transaction.amount)', 'DESC')
-      .limit(1)
-      .getRawOne();
+      .limit(5)
+      .getRawMany();
 
-    return {
-      name: result?.name || 'No expenses',
-      amount: result ? parseFloat(result.totalAmount) : 0,
-    };
+    if (!topReasons.length) return [];
+
+    // For each reason fetch individual transactions (cast reasonId to number — raw results are strings in pg)
+    const results: TopSpendingReason[] = await Promise.all(
+      topReasons.map(async (reason) => {
+        const reasonId = Number(reason.reasonId);
+        const transactions = await this.transactionRepository.find({
+          where: { userId, month, year, expenseReasonId: reasonId },
+          order: { transactionDate: 'DESC' },
+          select: ['transactionDate', 'amount', 'transactionType', 'notes'],
+        });
+
+        return {
+          name: reason.name,
+          totalAmount: parseFloat(reason.totalAmount),
+          transactionCount: parseInt(reason.transactionCount),
+          transactions: transactions.map((t) => ({
+            transactionDate: t.transactionDate as unknown as string,
+            amount: Number(t.amount),
+            transactionType: t.transactionType,
+            notes: t.notes ?? null,
+          })),
+        };
+      }),
+    );
+
+    return results;
   }
 
   private async getMonthlyComparison(userId: number, currentMonth: number, currentYear: number): Promise<MonthlyComparison> {

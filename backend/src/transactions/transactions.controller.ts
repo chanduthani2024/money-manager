@@ -73,6 +73,11 @@ export class TransactionsController {
     return this.transactionsService.assignExpenseReason(req.user.id, +id, body.expenseReasonId, body.notes);
   }
 
+  @Patch(':id/remove-reason')
+  removeExpenseReason(@Request() req: any, @Param('id') id: string) {
+    return this.transactionsService.removeExpenseReason(req.user.id, +id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.transactionsService.findOne(+id);

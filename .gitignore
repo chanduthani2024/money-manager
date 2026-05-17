@@ -3,3 +3,7 @@
 /backend/node_modules
 /backend/dist
 /environments
+backend/environments/
+*.env
+*.env.*
+client_secret_*.json

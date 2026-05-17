@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { dashboardService } from '../services/dashboard';
 import { transactionService } from '../services/transactions';
-import { DashboardSummary } from '../types/dashboard';
+import { DashboardSummary, TopSpendingReason, SpendingReasonTransaction } from '../types/dashboard';
 import { GmailMessage } from '../types/budget';
 import { toast } from 'react-hot-toast';
-import { 
-  IndianRupee, 
-  CreditCard, 
-  Wallet, 
-  TrendingUp, 
-  TrendingDown,
+import { format } from 'date-fns';
+import {
+  IndianRupee,
+  CreditCard,
+  Wallet,
+  TrendingUp,
   AlertTriangle,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -25,6 +28,7 @@ export const DashboardPage: React.FC = () => {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncedEmails, setSyncedEmails] = useState<GmailMessage[]>([]);
   const [syncResultAvailable, setSyncResultAvailable] = useState(false);
+  const [expandedReason, setExpandedReason] = useState<string | null>(null);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -262,9 +266,38 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  const budgetUsedPercentage = dashboardData.totalSalary > 0 
-    ? (dashboardData.totalSpent / dashboardData.totalSalary) * 100 
+  const budgetUsedPercentage = dashboardData.totalSalary > 0
+    ? (dashboardData.totalSpent / dashboardData.totalSalary) * 100
     : 0;
+
+  const topSpendingReasons = dashboardData.topSpendingReasons ?? [];
+  const maxReasonAmount = topSpendingReasons.length > 0 ? topSpendingReasons[0].totalAmount : 1;
+
+  const TYPE_CONFIG: Record<string, { label: string; color: string; bg: string; text: string }> = {
+    needs:       { label: 'Needs',       color: '#3B82F6', bg: 'bg-blue-100',   text: 'text-blue-700' },
+    wants:       { label: 'Wants',       color: '#8B5CF6', bg: 'bg-purple-100', text: 'text-purple-700' },
+    investments: { label: 'Investments', color: '#10B981', bg: 'bg-green-100',  text: 'text-green-700' },
+  };
+
+  const spendingByType = dashboardData.categorySpending.reduce<Record<string, number>>((acc, cat) => {
+    const key = (cat.categoryType || '').toLowerCase();
+    acc[key] = (acc[key] ?? 0) + cat.totalSpent;
+    return acc;
+  }, {});
+
+  const totalTypeSpent = Object.values(spendingByType).reduce((s: number, v: number) => s + v, 0);
+
+  const donutData: { type: string; label: string; color: string; amount: number; percentage: number }[] =
+    (Object.entries(spendingByType) as [string, number][])
+      .filter(([, amount]) => amount > 0)
+      .map(([type, amount]) => ({
+        type,
+        label: TYPE_CONFIG[type]?.label ?? type,
+        color: TYPE_CONFIG[type]?.color ?? '#9CA3AF',
+        amount,
+        percentage: totalTypeSpent > 0 ? (amount / totalTypeSpent) * 100 : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
   return (
     <div className="space-y-6">
@@ -454,7 +487,7 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center">
             <IndianRupee className="h-8 w-8 text-green-500" />
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Total Balance</p>
+              <p className="text-sm font-medium text-gray-500">Total Credited</p>
               <p className="text-2xl font-bold text-gray-900">
                 {formatCurrency(dashboardData.totalSalary)}
               </p>
@@ -525,59 +558,144 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">Top Spending Reason</h3>
-          <div className="text-center py-4">
-            <p className="text-3xl font-bold text-primary-600">
-              {formatCurrency(dashboardData.topSpendingReason.amount)}
-            </p>
-            <p className="text-lg text-gray-700 mt-2">
-              {dashboardData.topSpendingReason.name}
-            </p>
-          </div>
+          <h3 className="text-lg font-semibold mb-4">Top Spending Reasons</h3>
+          {topSpendingReasons.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No expenses recorded this month</p>
+          ) : (
+            <div className="space-y-2">
+              {topSpendingReasons.map((reason: TopSpendingReason, index: number) => {
+                const isExpanded = expandedReason === reason.name;
+                const barWidth = maxReasonAmount > 0 ? (reason.totalAmount / maxReasonAmount) * 100 : 0;
+                const rankColors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-blue-400', 'bg-gray-300'];
+                return (
+                  <div key={reason.name} className="rounded-lg border border-gray-100 overflow-hidden">
+                    {/* Row header — click to expand */}
+                    <button
+                      onClick={() => setExpandedReason(isExpanded ? null : reason.name)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <span className="text-xs font-bold text-gray-400 w-4 flex-shrink-0">#{index + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-sm font-medium text-gray-800 truncate">{reason.name}</span>
+                          <span className="text-sm font-semibold text-gray-900 ml-2 flex-shrink-0">
+                            {formatCurrency(reason.totalAmount)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                            <div
+                              className={`h-1.5 rounded-full ${rankColors[index] ?? 'bg-gray-300'} transition-all duration-300`}
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-400 flex-shrink-0">
+                            {reason.transactionCount} txn{reason.transactionCount !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                      {isExpanded
+                        ? <ChevronUp className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        : <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />}
+                    </button>
+
+                    {/* Expanded transaction list */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-100 bg-gray-50 divide-y divide-gray-100">
+                        {reason.transactions.map((tx: SpendingReasonTransaction, txIndex: number) => (
+                          <div key={txIndex} className="flex items-center justify-between px-4 py-2.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${tx.transactionType === 'credit' ? 'bg-green-500' : 'bg-red-400'}`} />
+                              <span className="text-xs text-gray-500 flex-shrink-0">
+                                {format(new Date(tx.transactionDate), 'dd MMM')}
+                              </span>
+                              {tx.notes && (
+                                <span className="text-xs text-gray-400 truncate">{tx.notes}</span>
+                              )}
+                            </div>
+                            <span className={`text-xs font-medium flex-shrink-0 ml-2 ${tx.transactionType === 'credit' ? 'text-green-600' : 'text-gray-800'}`}>
+                              {tx.transactionType === 'credit' ? '+' : '-'}{formatCurrency(tx.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Monthly Comparison */}
+      {/* Spending Breakdown by Type */}
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4">Monthly Comparison</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h4 className="font-medium text-gray-700 mb-2">Current Month</h4>
-            <p className="text-2xl font-bold text-gray-900">
-              {formatCurrency(dashboardData.monthlyComparison.currentMonth.totalSpent)}
-            </p>
-            <p className="text-sm text-gray-500">
-              {dashboardData.monthlyComparison.currentMonth.month}/{dashboardData.monthlyComparison.currentMonth.year}
-            </p>
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-700 mb-2">Previous Month</h4>
-            <p className="text-2xl font-bold text-gray-900">
-              {formatCurrency(dashboardData.monthlyComparison.previousMonth.totalSpent)}
-            </p>
-            <p className="text-sm text-gray-500">
-              {dashboardData.monthlyComparison.previousMonth.month}/{dashboardData.monthlyComparison.previousMonth.year}
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Change</span>
-            <div className="flex items-center space-x-2">
-              {dashboardData.monthlyComparison.changes.totalChange >= 0 ? (
-                <TrendingUp className="h-4 w-4 text-red-500" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-green-500" />
-              )}
-              <span className={`text-sm font-medium ${
-                dashboardData.monthlyComparison.changes.totalChange >= 0 ? 'text-red-600' : 'text-green-600'
-              }`}>
-                {formatCurrency(Math.abs(dashboardData.monthlyComparison.changes.totalChange))} 
-                ({Math.abs(dashboardData.monthlyComparison.changes.totalChangePercentage).toFixed(1)}%)
-              </span>
+        <h3 className="text-lg font-semibold mb-5">Spending Breakdown</h3>
+        {donutData.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">No categorized spending this month</p>
+        ) : (
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            {/* Donut chart */}
+            <div className="w-full md:w-48 h-48 flex-shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={donutData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="58%"
+                    outerRadius="80%"
+                    paddingAngle={3}
+                    dataKey="amount"
+                    strokeWidth={0}
+                  >
+                    {donutData.map((entry) => (
+                      <Cell key={entry.type} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number) => [formatCurrency(value), '']}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                    itemStyle={{ padding: 0 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Legend + stats */}
+            <div className="flex-1 w-full space-y-3">
+              {donutData.map((entry) => {
+                const cfg = TYPE_CONFIG[entry.type];
+                return (
+                  <div key={entry.type}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                        <span className="text-sm font-medium text-gray-700">{entry.label}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${cfg?.bg ?? 'bg-gray-100'} ${cfg?.text ?? 'text-gray-600'}`}>
+                          {entry.percentage.toFixed(1)}%
+                        </span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{formatCurrency(entry.amount)}</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div
+                        className="h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${entry.percentage}%`, backgroundColor: entry.color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Total */}
+              <div className="pt-3 mt-1 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-sm text-gray-500">Total categorized</span>
+                <span className="text-sm font-bold text-gray-900">{formatCurrency(totalTypeSpent)}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Budget Status */}

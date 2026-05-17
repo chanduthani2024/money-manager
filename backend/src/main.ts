@@ -3,7 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
-dotenv.config({ path: 'environments/stage.env' });
+const envFile = process.env.NODE_ENV === 'production' ? 'environments/production.env' : 'environments/stage.env';
+dotenv.config({ path: envFile });
 
 async function bootstrap() {
   const missing = [];

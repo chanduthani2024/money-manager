@@ -5,17 +5,20 @@ import { categoryService, expenseReasonService } from '../services/categories';
 import { budgetService } from '../services/budget';
 import { Transaction, Category, ExpenseReason, GmailTransaction } from '../types/budget';
 import { toast } from 'react-hot-toast';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Filter,
+  Trash2,
   Calendar,
   IndianRupee,
   FileText,
   X,
   Zap,
-  Target
+  Target,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { DateRangePicker } from '../components/common/DateRangePicker';
@@ -55,6 +58,7 @@ export const TransactionsPage: React.FC = () => {
   const [uncategorizedMonthFilter, setUncategorizedMonthFilter] = useState<number | undefined>(new Date().getMonth() + 1);
   const [uncategorizedYearFilter, setUncategorizedYearFilter] = useState<number | undefined>(new Date().getFullYear());
   const [monthlyBudgetSalary, setMonthlyBudgetSalary] = useState<number | null>(null);
+  const [deleteModalTransaction, setDeleteModalTransaction] = useState<Transaction | null>(null);
 
   const fetchPendingGmailTransactions = async () => {
     try {
@@ -136,16 +140,26 @@ export const TransactionsPage: React.FC = () => {
   };
 
   const handleDeleteTransaction = async (transactionId: number) => {
-    if (!window.confirm('Are you sure you want to delete this transaction?')) {
-      return;
-    }
-
     try {
       await transactionService.delete(transactionId);
       toast.success('Transaction deleted successfully');
+      setDeleteModalTransaction(null);
       fetchTransactions();
+      fetchUncategorizedTransactions();
     } catch (error) {
       toast.error('Failed to delete transaction');
+    }
+  };
+
+  const handleRemoveExpenseReason = async (transactionId: number) => {
+    try {
+      await transactionService.removeExpenseReason(transactionId);
+      toast.success('Expense reason removed successfully');
+      setDeleteModalTransaction(null);
+      fetchTransactions();
+      fetchUncategorizedTransactions();
+    } catch (error) {
+      toast.error('Failed to remove expense reason');
     }
   };
 
@@ -310,19 +324,14 @@ export const TransactionsPage: React.FC = () => {
   };
 
   const getTotalAmount = () => {
-    return transactions.reduce((sum, transaction) => {
+    return visibleTransactions.reduce((sum, transaction) => {
       const amount = typeof transaction.amount === 'string' ? parseFloat(transaction.amount) : transaction.amount;
       const signed = transaction.transactionType === 'credit' ? -amount : amount;
       return sum + (isNaN(signed) ? 0 : signed);
     }, 0);
   };
 
-  const getAverageAmount = () => {
-    const total = getTotalAmount();
-    return transactions.length > 0 ? total / transactions.length : 0;
-  };
-
-  const searchLower = (filters.search || '').toLowerCase();
+const searchLower = (filters.search || '').toLowerCase();
   const visibleTransactions = transactions.filter(t => {
     if (searchLower && !(t.expenseReason?.name.toLowerCase().includes(searchLower) ||
         t.category?.name.toLowerCase().includes(searchLower) ||
@@ -785,20 +794,34 @@ export const TransactionsPage: React.FC = () => {
             <div className="ml-4">
               <p className="text-sm text-gray-600">Total Transactions</p>
               <p className="text-2xl font-bold text-gray-900">
-                {transactions.length}
+                {visibleTransactions.length}
               </p>
             </div>
           </div>
         </div>
 
         <div className="card">
-          <div className="flex items-center">
-            <Calendar className="h-8 w-8 text-green-500" />
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">Average per Transaction</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {formatCurrency(getAverageAmount())}
-              </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <TrendingDown className="h-6 w-6 text-red-500" />
+                <div>
+                  <p className="text-xs text-gray-500">Debits</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {visibleTransactions.filter(t => t.transactionType === 'debit').length}
+                  </p>
+                </div>
+              </div>
+              <div className="w-px h-10 bg-gray-200" />
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-6 w-6 text-green-500" />
+                <div>
+                  <p className="text-xs text-gray-500">Credits</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {visibleTransactions.filter(t => t.transactionType === 'credit').length}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -914,7 +937,7 @@ export const TransactionsPage: React.FC = () => {
                                 <Edit className="h-4 w-4" />
                               </button> */}
                               <button
-                                onClick={() => handleDeleteTransaction(transaction.id)}
+                                onClick={() => setDeleteModalTransaction(transaction)}
                                 className="p-2 text-gray-400 hover:text-red-600"
                                 title="Delete transaction"
                               >
@@ -1161,6 +1184,81 @@ export const TransactionsPage: React.FC = () => {
                   Classify Transaction
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Delete / Remove Reason Modal */}
+      {deleteModalTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Transaction</h3>
+              </div>
+              <button
+                onClick={() => setDeleteModalTransaction(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                What would you like to do with this transaction of{' '}
+                <span className="font-semibold text-gray-900">
+                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(deleteModalTransaction.amount)}
+                </span>
+                {deleteModalTransaction.expenseReason && (
+                  <> tagged as <span className="font-semibold text-gray-900">{deleteModalTransaction.expenseReason.name}</span></>
+                )}
+                ?
+              </p>
+
+              <div className="space-y-3">
+                {deleteModalTransaction.expenseReasonId && (
+                  <button
+                    onClick={() => handleRemoveExpenseReason(deleteModalTransaction.id)}
+                    className="w-full flex items-start gap-3 p-4 border-2 border-orange-200 bg-orange-50 rounded-lg hover:border-orange-300 hover:bg-orange-100 transition-all text-left"
+                  >
+                    <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <X className="h-4 w-4 text-orange-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900 text-sm">Remove expense reason only</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Keeps the transaction but clears the category tag. Budget allocation is reversed.
+                      </p>
+                    </div>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleDeleteTransaction(deleteModalTransaction.id)}
+                  className="w-full flex items-start gap-3 p-4 border-2 border-red-200 bg-red-50 rounded-lg hover:border-red-300 hover:bg-red-100 transition-all text-left"
+                >
+                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Trash2 className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">Delete transaction permanently</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Removes the transaction and reverses all budget impacts. This cannot be undone.
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setDeleteModalTransaction(null)}
+                className="w-full btn btn-secondary text-sm"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

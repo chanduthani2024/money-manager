@@ -1,12 +1,23 @@
+export interface SpendingReasonTransaction {
+  transactionDate: string;
+  amount: number;
+  transactionType: 'debit' | 'credit';
+  notes: string | null;
+}
+
+export interface TopSpendingReason {
+  name: string;
+  totalAmount: number;
+  transactionCount: number;
+  transactions: SpendingReasonTransaction[];
+}
+
 export interface DashboardSummary {
   totalSalary: number;
   totalSpent: number;
   totalRemaining: number;
   categorySpending: CategorySpending[];
-  topSpendingReason: {
-    name: string;
-    amount: number;
-  };
+  topSpendingReasons: TopSpendingReason[];
   monthlyComparison: MonthlyComparison;
   budgetStatus: BudgetStatus[];
 }

@@ -66,4 +66,8 @@ export const transactionService = {
   async assignExpenseReason(id: number, expenseReasonId: number, notes?: string): Promise<Transaction> {
     return apiClient.patch<Transaction>(`/transactions/${id}/assign-reason`, { expenseReasonId, notes });
   },
+
+  async removeExpenseReason(id: number): Promise<Transaction> {
+    return apiClient.patch<Transaction>(`/transactions/${id}/remove-reason`, {});
+  },
 };

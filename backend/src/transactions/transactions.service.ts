@@ -501,16 +501,54 @@ export class TransactionsService {
 
   async remove(id: number): Promise<void> {
     const transaction = await this.findOne(id);
+
+    // Delete the linked GmailTransaction record (sourced from email parsing) along with the transaction
+    const gmailTx = await this.gmailTransactionRepository.findOne({
+      where: { transactionId: id, userId: transaction.userId },
+    });
+    if (gmailTx) {
+      await this.gmailTransactionRepository.delete(gmailTx.id);
+    }
+
     await this.transactionRepository.delete(id);
-    // Always reverse totalSpent; also reverse allocation if expense reason was assigned
+
+    // Reverse totalSpent (recalculates from remaining transactions in DB).
+    // Also reverse allocation.spentAmount if an expense reason was assigned.
     await this.updateBudgetAllocation(
       transaction.userId,
-      transaction.expenseReasonId,  // null-safe: skips allocation when null
+      transaction.expenseReasonId,
       transaction.month,
       transaction.year,
       -Number(transaction.amount),
       transaction.transactionType
     );
+  }
+
+  async removeExpenseReason(userId: number, transactionId: number): Promise<Transaction> {
+    const transaction = await this.transactionRepository.findOne({ where: { id: transactionId, userId } });
+    if (!transaction) throw new BadRequestException('Transaction not found');
+    if (!transaction.expenseReasonId) throw new BadRequestException('Transaction has no expense reason assigned');
+
+    const { expenseReasonId, month, year, transactionType, amount } = transaction;
+
+    // Reverse exactly what assign-reason added to budget_allocations.spentAmount.
+    // skipTotalSpent=true because the transaction itself stays — only the allocation changes.
+    const reverseAmountChange = transactionType === 'credit' ? Number(amount) : -Number(amount);
+    await this.updateBudgetAllocation(userId, expenseReasonId, month, year, reverseAmountChange, transactionType, true);
+
+    // Clear reason and category from the transaction
+    transaction.expenseReasonId = null;
+    transaction.categoryId = null;
+    await this.transactionRepository.save(transaction);
+
+    // Clear from linked GmailTransaction if one exists
+    const gmailTx = await this.gmailTransactionRepository.findOne({ where: { transactionId, userId } });
+    if (gmailTx) {
+      gmailTx.expenseReasonId = null;
+      await this.gmailTransactionRepository.save(gmailTx);
+    }
+
+    return this.findOne(transactionId);
   }
 
   async getUncategorizedTransactions(userId: number): Promise<Transaction[]> {
