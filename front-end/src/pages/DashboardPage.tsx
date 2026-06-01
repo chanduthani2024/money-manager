@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { dashboardService } from '../services/dashboard';
 import { transactionService } from '../services/transactions';
@@ -6,6 +7,7 @@ import { DashboardSummary, TopSpendingReason, SpendingReasonTransaction } from '
 import { GmailMessage } from '../types/budget';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
+import { ImportBankStatementModal } from '../components/ImportBankStatementModal';
 import {
   IndianRupee,
   CreditCard,
@@ -15,9 +17,11 @@ import {
   PieChart as PieChartIcon,
   ChevronDown,
   ChevronUp,
+  FileUp,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
@@ -29,6 +33,7 @@ export const DashboardPage: React.FC = () => {
   const [syncedEmails, setSyncedEmails] = useState<GmailMessage[]>([]);
   const [syncResultAvailable, setSyncResultAvailable] = useState(false);
   const [expandedReason, setExpandedReason] = useState<string | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -167,55 +172,63 @@ export const DashboardPage: React.FC = () => {
 
         {/* Sync Bank Emails - always visible */}
         <div className="card">
-          <div className="flex items-center justify-between">
+          {/* Card header: title + Import PDF */}
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Sync Bank Emails</h2>
-              <p className="text-sm text-gray-500">
-                Import transactions from Gmail automatically
-              </p>
+              <h2 className="text-lg font-semibold text-gray-900">Import Transactions</h2>
+              <p className="text-sm text-gray-500">Sync from Gmail or upload a bank statement PDF</p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-                <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
-                  syncMode === 'today' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                }`}>
-                  <input type="radio" name="syncMode" value="today" checked={syncMode === 'today'} onChange={(e) => setSyncMode(e.target.value as 'today')} className="sr-only" />
-                  Today
-                </label>
-                <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
-                  syncMode === '7days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                }`}>
-                  <input type="radio" name="syncMode" value="7days" checked={syncMode === '7days'} onChange={(e) => setSyncMode(e.target.value as '7days')} className="sr-only" />
-                  7 days
-                </label>
-                <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
-                  syncMode === '30days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                }`}>
-                  <input type="radio" name="syncMode" value="30days" checked={syncMode === '30days'} onChange={(e) => setSyncMode(e.target.value as '30days')} className="sr-only" />
-                  30 days
-                </label>
-                <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
-                  syncMode === 'custom' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                }`}>
-                  <input type="radio" name="syncMode" value="custom" checked={syncMode === 'custom'} onChange={(e) => setSyncMode(e.target.value as 'custom')} className="sr-only" />
-                  Custom
-                </label>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              <FileUp className="h-4 w-4" />
+              Import PDF
+            </button>
+          </div>
+
+          {/* Gmail sync controls row */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                syncMode === 'today' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}>
+                <input type="radio" name="syncMode" value="today" checked={syncMode === 'today'} onChange={(e) => setSyncMode(e.target.value as 'today')} className="sr-only" />
+                Today
+              </label>
+              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                syncMode === '7days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}>
+                <input type="radio" name="syncMode" value="7days" checked={syncMode === '7days'} onChange={(e) => setSyncMode(e.target.value as '7days')} className="sr-only" />
+                7 days
+              </label>
+              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                syncMode === '30days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}>
+                <input type="radio" name="syncMode" value="30days" checked={syncMode === '30days'} onChange={(e) => setSyncMode(e.target.value as '30days')} className="sr-only" />
+                30 days
+              </label>
+              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+                syncMode === 'custom' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+              }`}>
+                <input type="radio" name="syncMode" value="custom" checked={syncMode === 'custom'} onChange={(e) => setSyncMode(e.target.value as 'custom')} className="sr-only" />
+                Custom
+              </label>
+            </div>
+            {syncMode === 'custom' && (
+              <div className="flex items-center gap-2">
+                <input type="date" value={syncFromDate} onChange={(e) => { setSyncFromDate(e.target.value); setSyncResultAvailable(false); }} className="form-input text-sm py-1.5 px-2 w-32" />
+                <span className="text-gray-400 text-sm">to</span>
+                <input type="date" value={syncToDate} onChange={(e) => { setSyncToDate(e.target.value); setSyncResultAvailable(false); }} className="form-input text-sm py-1.5 px-2 w-32" />
               </div>
-              {syncMode === 'custom' && (
-                <div className="flex items-center gap-2">
-                  <input type="date" value={syncFromDate} onChange={(e) => { setSyncFromDate(e.target.value); setSyncResultAvailable(false); }} className="form-input text-sm py-1.5 px-2 w-32" />
-                  <span className="text-gray-400 text-sm">to</span>
-                  <input type="date" value={syncToDate} onChange={(e) => { setSyncToDate(e.target.value); setSyncResultAvailable(false); }} className="form-input text-sm py-1.5 px-2 w-32" />
-                </div>
+            )}
+            <button onClick={handleSyncEmails} disabled={syncLoading} className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              {syncLoading ? (
+                <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>Syncing...</>
+              ) : (
+                <><CreditCard className="h-4 w-4 mr-2" />Sync Gmail</>
               )}
-              <button onClick={handleSyncEmails} disabled={syncLoading} className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                {syncLoading ? (
-                  <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>Syncing...</>
-                ) : (
-                  <><CreditCard className="h-4 w-4 mr-2" />Sync</>
-                )}
-              </button>
-            </div>
+            </button>
           </div>
           {syncedEmails.length > 0 && (
             <div className="mt-6 border-t pt-4">
@@ -262,6 +275,13 @@ export const DashboardPage: React.FC = () => {
             </a>
           </div>
         </div>
+
+        {showImportModal && (
+          <ImportBankStatementModal
+            onClose={() => setShowImportModal(false)}
+            onImported={fetchDashboardData}
+          />
+        )}
       </div>
     );
   }
@@ -334,114 +354,63 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       <div className="card">
-        <div className="flex items-center justify-between">
+        {/* Card header: title + Import PDF */}
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Sync Bank Emails</h2>
-            <p className="text-sm text-gray-500">
-              Import transactions from Gmail automatically
-            </p>
+            <h2 className="text-lg font-semibold text-gray-900">Import Transactions</h2>
+            <p className="text-sm text-gray-500">Sync from Gmail or upload a bank statement PDF</p>
           </div>
-          <div className="flex items-center gap-4">
-            {/* Time Period Selection - Horizontal */}
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
-                syncMode === 'today' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-              }`}>
-                <input
-                  type="radio"
-                  name="syncMode"
-                  value="today"
-                  checked={syncMode === 'today'}
-                  onChange={(e) => setSyncMode(e.target.value as 'today')}
-                  className="sr-only"
-                />
-                Today
-              </label>
-              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
-                syncMode === '7days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-              }`}>
-                <input
-                  type="radio"
-                  name="syncMode"
-                  value="7days"
-                  checked={syncMode === '7days'}
-                  onChange={(e) => setSyncMode(e.target.value as '7days')}
-                  className="sr-only"
-                />
-                7 days
-              </label>
-              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
-                syncMode === '30days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-              }`}>
-                <input
-                  type="radio"
-                  name="syncMode"
-                  value="30days"
-                  checked={syncMode === '30days'}
-                  onChange={(e) => setSyncMode(e.target.value as '30days')}
-                  className="sr-only"
-                />
-                30 days
-              </label>
-              <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
-                syncMode === 'custom' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-              }`}>
-                <input
-                  type="radio"
-                  name="syncMode"
-                  value="custom"
-                  checked={syncMode === 'custom'}
-                  onChange={(e) => setSyncMode(e.target.value as 'custom')}
-                  className="sr-only"
-                />
-                Custom
-              </label>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <FileUp className="h-4 w-4" />
+            Import PDF
+          </button>
+        </div>
+
+        {/* Gmail sync controls */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+              syncMode === 'today' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}>
+              <input type="radio" name="syncMode" value="today" checked={syncMode === 'today'} onChange={(e) => setSyncMode(e.target.value as 'today')} className="sr-only" />
+              Today
+            </label>
+            <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+              syncMode === '7days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}>
+              <input type="radio" name="syncMode" value="7days" checked={syncMode === '7days'} onChange={(e) => setSyncMode(e.target.value as '7days')} className="sr-only" />
+              7 days
+            </label>
+            <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+              syncMode === '30days' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}>
+              <input type="radio" name="syncMode" value="30days" checked={syncMode === '30days'} onChange={(e) => setSyncMode(e.target.value as '30days')} className="sr-only" />
+              30 days
+            </label>
+            <label className={`flex items-center px-3 py-1.5 rounded-md cursor-pointer text-sm font-medium transition-colors ${
+              syncMode === 'custom' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}>
+              <input type="radio" name="syncMode" value="custom" checked={syncMode === 'custom'} onChange={(e) => setSyncMode(e.target.value as 'custom')} className="sr-only" />
+              Custom
+            </label>
+          </div>
+          {syncMode === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input type="date" value={syncFromDate} onChange={(e) => { setSyncFromDate(e.target.value); setSyncResultAvailable(false); }} className="form-input text-sm py-1.5 px-2 w-32" />
+              <span className="text-gray-400 text-sm">to</span>
+              <input type="date" value={syncToDate} onChange={(e) => { setSyncToDate(e.target.value); setSyncResultAvailable(false); }} className="form-input text-sm py-1.5 px-2 w-32" />
             </div>
-
-            {/* Custom Date Inputs - Inline */}
-            {syncMode === 'custom' && (
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={syncFromDate}
-                  onChange={(e) => {
-                    setSyncFromDate(e.target.value);
-                    setSyncResultAvailable(false);
-                  }}
-                  className="form-input text-sm py-1.5 px-2 w-32"
-                />
-                <span className="text-gray-400 text-sm">to</span>
-                <input
-                  type="date"
-                  value={syncToDate}
-                  onChange={(e) => {
-                    setSyncToDate(e.target.value);
-                    setSyncResultAvailable(false);
-                  }}
-                  className="form-input text-sm py-1.5 px-2 w-32"
-                />
-              </div>
+          )}
+          <button onClick={handleSyncEmails} disabled={syncLoading} className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            {syncLoading ? (
+              <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>Syncing...</>
+            ) : (
+              <><CreditCard className="h-4 w-4 mr-2" />Sync Gmail</>
             )}
-
-            {/* Sync Button */}
-            <button
-              onClick={handleSyncEmails}
-              disabled={syncLoading}
-              className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {syncLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Sync
-                </>
-              )}
-            </button>
-          </div>
+          </button>
         </div>
 
         {syncedEmails.length > 0 && (
@@ -558,7 +527,15 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4">Top Spending Reasons</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Top Transaction Reasons</h3>
+            <button
+              onClick={() => navigate(`/transaction-reasons`)}
+              className="text-xs font-medium text-primary-500 hover:text-primary-600 hover:underline transition-colors"
+            >
+              View More
+            </button>
+          </div>
           {topSpendingReasons.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-4">No expenses recorded this month</p>
           ) : (
@@ -784,6 +761,13 @@ export const DashboardPage: React.FC = () => {
             ))}
         </div>
       </div>
+
+      {showImportModal && (
+        <ImportBankStatementModal
+          onClose={() => setShowImportModal(false)}
+          onImported={fetchDashboardData}
+        />
+      )}
     </div>
   );
 };

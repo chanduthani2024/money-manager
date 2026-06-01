@@ -1,5 +1,5 @@
 import { apiClient } from './api';
-import { DashboardSummary, MonthlySpending, YearlySpendingData } from '../types/dashboard';
+import { DashboardSummary, MonthlySpending, YearlySpendingData, TopSpendingReason } from '../types/dashboard';
 
 export const dashboardService = {
   async getSummary(month?: number, year?: number): Promise<DashboardSummary> {
@@ -15,5 +15,9 @@ export const dashboardService = {
 
   async getCategoryYearlySpending(year: number): Promise<YearlySpendingData[]> {
     return apiClient.get<YearlySpendingData[]>('/dashboard/category-yearly', { year });
+  },
+
+  async getAllSpendingReasons(month: number, year: number): Promise<TopSpendingReason[]> {
+    return apiClient.get<TopSpendingReason[]>('/dashboard/all-reasons', { month, year });
   },
 };

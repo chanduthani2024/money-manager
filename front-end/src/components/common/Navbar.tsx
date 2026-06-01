@@ -1,15 +1,15 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
-  Home, 
-  IndianRupee, 
-  Plus, 
-  BarChart3, 
-  Settings, 
+import {
+  Home,
+  IndianRupee,
+  Plus,
+  Settings,
   LogOut,
-  PieChart,
-  Calendar
+  Sparkles,
+  Calendar,
+  Tag
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -26,8 +26,8 @@ export const Navbar: React.FC = () => {
     { to: '/budget', icon: IndianRupee, label: 'Budget' },
     { to: '/add-expense', icon: Plus, label: 'Add Expense' },
     { to: '/transactions', icon: Calendar, label: 'Transactions' },
-    // { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-    { to: '/categories', icon: Settings, label: 'Categories' },
+    { to: '/categories', icon: Tag, label: 'Categories' },
+    { to: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (
@@ -36,8 +36,8 @@ export const Navbar: React.FC = () => {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <PieChart className="h-8 w-8 text-primary-500" />
-              <span className="ml-2 text-xl font-bold text-gray-800">Money Manager</span>
+              <Sparkles className="h-8 w-8 text-primary-500" />
+              <span className="ml-2 text-xl font-bold text-gray-800">Culture</span>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               {navItems.map((item) => (

@@ -52,4 +52,7 @@ export class Transaction {
 
   @Column({ nullable: true })
   categoryId: number | null;
+
+  @Column({ nullable: true, type: 'varchar', length: 30 })
+  refNo: string | null;
 }

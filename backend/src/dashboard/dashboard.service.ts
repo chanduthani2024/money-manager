@@ -43,7 +43,7 @@ export class DashboardService {
     const categorySpending = await this.getCategorySpending(userId, currentMonth, currentYear);
 
     // Get top spending reasons
-    const topSpendingReasons = await this.getTopSpendingReasons(userId, currentMonth, currentYear);
+    const topSpendingReasons = await this.getTopSpendingReasons(userId, currentMonth, currentYear, 5);
 
     // Get monthly comparison
     const monthlyComparison = await this.getMonthlyComparison(userId, currentMonth, currentYear);
@@ -75,9 +75,13 @@ export class DashboardService {
     }));
   }
 
-  private async getTopSpendingReasons(userId: number, month: number, year: number): Promise<TopSpendingReason[]> {
+  async getAllSpendingReasons(userId: number, month: number, year: number): Promise<TopSpendingReason[]> {
+    return this.getTopSpendingReasons(userId, month, year);
+  }
+
+  private async getTopSpendingReasons(userId: number, month: number, year: number, limit?: number): Promise<TopSpendingReason[]> {
     // innerJoin ensures expenseReason is always present in the result rows
-    const topReasons = await this.transactionRepository
+    const qb = this.transactionRepository
       .createQueryBuilder('transaction')
       .innerJoin('transaction.expenseReason', 'expenseReason')
       .select('expenseReason.id', 'reasonId')
@@ -88,9 +92,11 @@ export class DashboardService {
       .andWhere('transaction.month = :month', { month })
       .andWhere('transaction.year = :year', { year })
       .groupBy('expenseReason.id, expenseReason.name')
-      .orderBy('SUM(transaction.amount)', 'DESC')
-      .limit(5)
-      .getRawMany();
+      .orderBy('SUM(transaction.amount)', 'DESC');
+
+    if (limit !== undefined) qb.limit(limit);
+
+    const topReasons = await qb.getRawMany();
 
     if (!topReasons.length) return [];
 

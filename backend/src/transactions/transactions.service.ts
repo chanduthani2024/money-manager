@@ -136,11 +136,15 @@ export class TransactionsService {
     const dateFromHeader = rawDate ? new Date(rawDate) : null;
     let transactionDate = dateFromHeader && !isNaN(dateFromHeader.getTime()) ? dateFromHeader : null;
 
+    const refNoMatch = (snippet || '').match(/UPI\s*(?:transaction\s*)?(?:reference\s*no\.?:?\s*|Ref\.?\s*No\.?\s*:?\s*)(\d{6,20})/i);
+    const refNo = refNoMatch ? refNoMatch[1] : null;
+
     return {
       amount,
       transactionType: transactionType as 'debited' | 'credited' | 'unknown',
       transactionDate,
       cardType,
+      refNo,
     };
   }
 
@@ -262,6 +266,7 @@ export class TransactionsService {
         amount: parsed.amount,
         transactionType: parsed.transactionType,
         cardType: parsed.cardType,
+        refNo: parsed.refNo,
         isClassifiedReason: false,
         isRejected: false,
       });
@@ -299,6 +304,7 @@ export class TransactionsService {
           transactionDate,
           month,
           year,
+          refNo: gmailTx.refNo ?? null,
           createdAt: gmailTx.rawDate ? new Date(gmailTx.rawDate) : new Date(),
         });
         const savedTransaction = await this.transactionRepository.save(newTransaction);

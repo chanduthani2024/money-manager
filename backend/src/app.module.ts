@@ -7,6 +7,8 @@ import { ExpenseReasonsModule } from './expense-reasons/expense-reasons.module';
 import { MonthlyBudgetsModule } from './monthly-budgets/monthly-budgets.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { BankSettingsModule } from './bank-settings/bank-settings.module';
+import { BankStatementModule } from './bank-statement/bank-statement.module';
 import { databaseConfig } from './config/database.config';
 
 @Module({
@@ -19,6 +21,8 @@ import { databaseConfig } from './config/database.config';
     MonthlyBudgetsModule,
     TransactionsModule,
     DashboardModule,
+    BankSettingsModule,
+    BankStatementModule,
   ],
 })
 export class AppModule {}

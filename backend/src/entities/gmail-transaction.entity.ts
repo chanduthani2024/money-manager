@@ -67,6 +67,9 @@ export class GmailTransaction {
   @Column({ nullable: true })
   transactionId: number | null;
 
+  @Column({ nullable: true, type: 'varchar', length: 30 })
+  refNo: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

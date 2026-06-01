@@ -12,6 +12,8 @@ import { AddExpensePage } from './pages/AddExpensePage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { CategoriesPage } from './pages/CategoriesPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { TransactionReasonsPage } from './pages/TransactionReasonsPage';
 import { GoogleOAuthRedirectPage } from './pages/GoogleOAuthRedirectPage';
 
 function App() {
@@ -38,6 +40,8 @@ function App() {
                           <Route path="/transactions" element={<TransactionsPage />} />
                           {/* <Route path="/analytics" element={<AnalyticsPage />} /> */}
                           <Route path="/categories" element={<CategoriesPage />} />
+                          <Route path="/settings" element={<SettingsPage />} />
+                          <Route path="/transaction-reasons" element={<TransactionReasonsPage />} />
                           <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                       </div>
