@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../utils/format';
 import { dashboardService } from '../services/dashboard';
 import { budgetService } from '../services/budget';
 import { toast } from 'react-hot-toast';
@@ -118,14 +119,6 @@ export const AnalyticsPage: React.FC = () => {
     fetchData();
   }, [selectedPeriod]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
 
   const getCategoryColor = (categoryType: string, index: number) => {
     const colors = {

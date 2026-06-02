@@ -4,9 +4,7 @@ import { format } from 'date-fns';
 import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { dashboardService } from '../services/dashboard';
 import { TopSpendingReason, SpendingReasonTransaction } from '../types/dashboard';
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+import { formatCurrency } from '../utils/format';
 
 const RANK_COLORS = [
   'bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-blue-400', 'bg-indigo-400',

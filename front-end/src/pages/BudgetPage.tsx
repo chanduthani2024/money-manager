@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { formatCurrency } from '../utils/format';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { budgetService } from '../services/budget';
 import { categoryService, expenseReasonService } from '../services/categories';
@@ -300,14 +301,6 @@ export const BudgetPage: React.FC = () => {
     return watchedSalary - getTotalAllocated();
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
 
   const groupedReasons = categories.reduce((acc, category) => {
     acc[category.name] = expenseReasons.filter(reason => reason.categoryId === category.id);

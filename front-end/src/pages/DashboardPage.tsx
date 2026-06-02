@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { dashboardService } from '../services/dashboard';
 import { transactionService } from '../services/transactions';
-import { DashboardSummary, TopSpendingReason, SpendingReasonTransaction } from '../types/dashboard';
+import { DashboardSummary, TopSpendingReason, SpendingReasonTransaction, SpendingBreakdownRow } from '../types/dashboard';
+import { formatCurrency } from '../utils/format';
 import { GmailMessage } from '../types/budget';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -34,12 +35,19 @@ export const DashboardPage: React.FC = () => {
   const [syncResultAvailable, setSyncResultAvailable] = useState(false);
   const [expandedReason, setExpandedReason] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [breakdownRows, setBreakdownRows] = useState<SpendingBreakdownRow[]>([]);
+  const [disabledReasons, setDisabledReasons] = useState<Set<number>>(new Set());
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await dashboardService.getSummary(selectedMonth, selectedYear);
+      const [data, breakdown] = await Promise.all([
+        dashboardService.getSummary(selectedMonth, selectedYear),
+        dashboardService.getSpendingBreakdown(selectedMonth, selectedYear),
+      ]);
       setDashboardData(data);
+      setBreakdownRows(breakdown);
+      setDisabledReasons(new Set());
     } catch (error: any) {
       if (error.response?.status === 404 || error.message?.includes('No budget found')) {
         // No budget found for this month - show empty state
@@ -102,14 +110,6 @@ export const DashboardPage: React.FC = () => {
     fetchDashboardData();
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
 
   const getPercentageColor = (percentage: number) => {
     if (percentage >= 90) return 'text-red-600';
@@ -299,9 +299,19 @@ export const DashboardPage: React.FC = () => {
     investments: { label: 'Investments', color: '#10B981', bg: 'bg-green-100',  text: 'text-green-700' },
   };
 
-  const spendingByType = dashboardData.categorySpending.reduce<Record<string, number>>((acc, cat) => {
-    const key = (cat.categoryType || '').toLowerCase();
-    acc[key] = (acc[key] ?? 0) + cat.totalSpent;
+  const toggleReason = (id: number) => {
+    setDisabledReasons(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const activeRows = breakdownRows.filter(r => !disabledReasons.has(r.reasonId));
+
+  const spendingByType = activeRows.reduce<Record<string, number>>((acc, r) => {
+    const key = r.categoryType || 'uncategorized';
+    acc[key] = (acc[key] ?? 0) + r.totalAmount;
     return acc;
   }, {});
 
@@ -607,9 +617,45 @@ export const DashboardPage: React.FC = () => {
 
       {/* Spending Breakdown by Type */}
       <div className="card">
-        <h3 className="text-lg font-semibold mb-5">Spending Breakdown</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Spending Breakdown</h3>
+          {disabledReasons.size > 0 && (
+            <button
+              onClick={() => setDisabledReasons(new Set())}
+              className="text-xs text-primary-500 hover:text-primary-600 font-medium"
+            >
+              Reset filters
+            </button>
+          )}
+        </div>
+
+        {/* Reason filter chips */}
+        {breakdownRows.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-5">
+            {breakdownRows.map(r => {
+              const active = !disabledReasons.has(r.reasonId);
+              return (
+                <button
+                  key={r.reasonId}
+                  onClick={() => toggleReason(r.reasonId)}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
+                    active
+                      ? 'bg-gray-800 text-white border-gray-800'
+                      : 'bg-white text-gray-400 border-gray-200 line-through'
+                  }`}
+                >
+                  {active && <span className="w-1.5 h-1.5 rounded-full bg-white opacity-70 flex-shrink-0" />}
+                  {r.reasonName}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {donutData.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">No categorized spending this month</p>
+          <p className="text-sm text-gray-400 text-center py-6">
+            {breakdownRows.length === 0 ? 'No categorized spending this month' : 'All reasons filtered out'}
+          </p>
         ) : (
           <div className="flex flex-col md:flex-row items-center gap-6">
             {/* Donut chart */}

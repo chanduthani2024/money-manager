@@ -65,6 +65,13 @@ export interface BudgetStatus {
   isOverspent: boolean;
 }
 
+export interface SpendingBreakdownRow {
+  reasonId: number;
+  reasonName: string;
+  categoryType: string;
+  totalAmount: number;
+}
+
 export interface MonthlySpending {
   month: number;
   totalSpent: string;

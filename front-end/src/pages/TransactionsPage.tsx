@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../utils/format';
 import { Link } from 'react-router-dom';
 import { transactionService } from '../services/transactions';
 import { categoryService, expenseReasonService } from '../services/categories';
@@ -191,14 +192,6 @@ export const TransactionsPage: React.FC = () => {
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
 
   // Open reason selector modal for Gmail transaction classification
   const openReasonSelector = (transactionId: number) => {
@@ -430,12 +423,7 @@ const searchLower = (filters.search || '').toLowerCase();
               // Format amount with transaction type
               const formatAmount = (amount: number | null | undefined, type: string) => {
                 if (!amount && amount !== 0) return 'Amount unavailable';
-                const formattedAmount = new Intl.NumberFormat('en-IN', { 
-                  style: 'currency', 
-                  currency: 'INR',
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0
-                }).format(amount);
+                const formattedAmount = formatCurrency(amount);
                 
                 const typeLabel = type === 'debited' ? 'Debited' : 
                                  type === 'credited' ? 'Credited' : 'Unknown';
@@ -583,7 +571,7 @@ const searchLower = (filters.search || '').toLowerCase();
                 : 'No date';
               const formattedTime = format(istDate, 'h:mm a');
               const formattedCreatedDate = format(istDate, 'MMM d, yyyy');
-              const amountFormatted = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(tx.amount);
+              const amountFormatted = formatCurrency(tx.amount);
               return (
                 <div key={tx.id} className="border border-orange-200 bg-orange-50 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1">
@@ -1132,12 +1120,7 @@ const searchLower = (filters.search || '').toLowerCase();
                         const amount = classifyMode === 'gmail'
                           ? pendingGmailTransactions.find(t => t.id === currentTransactionId)?.amount
                           : uncategorizedTransactions.find(t => t.id === currentTransactionId)?.amount;
-                        return amount ? new Intl.NumberFormat('en-IN', { 
-                          style: 'currency', 
-                          currency: 'INR',
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0
-                        }).format(amount) : 'Amount unavailable';
+                        return amount ? formatCurrency(Number(amount)) : 'Amount unavailable';
                       })()}
                     </div>
                     <div className="text-xs text-gray-500 uppercase tracking-wide">
@@ -1211,7 +1194,7 @@ const searchLower = (filters.search || '').toLowerCase();
               <p className="text-sm text-gray-600">
                 What would you like to do with this transaction of{' '}
                 <span className="font-semibold text-gray-900">
-                  {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(deleteModalTransaction.amount)}
+                  {formatCurrency(deleteModalTransaction.amount)}
                 </span>
                 {deleteModalTransaction.expenseReason && (
                   <> tagged as <span className="font-semibold text-gray-900">{deleteModalTransaction.expenseReason.name}</span></>
