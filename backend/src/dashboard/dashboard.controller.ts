@@ -28,6 +28,18 @@ export class DashboardController {
     return this.dashboardService.getCategoryWiseYearlySpending(req.user.id, parseInt(year));
   }
 
+  @Get('spending-breakdown')
+  getSpendingBreakdown(
+    @Request() req,
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    const now = new Date();
+    const monthNum = month ? parseInt(month) : now.getMonth() + 1;
+    const yearNum = year ? parseInt(year) : now.getFullYear();
+    return this.dashboardService.getSpendingBreakdown(req.user.id, monthNum, yearNum);
+  }
+
   @Get('all-reasons')
   getAllSpendingReasons(
     @Request() req,

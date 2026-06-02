@@ -676,7 +676,26 @@ export class TransactionsService {
       .andWhere('transaction.month = :month', { month })
       .andWhere('transaction.year = :year', { year })
       .andWhere('transaction.categoryId IS NOT NULL')
+      .andWhere('transaction.transactionType = :type', { type: 'debit' })
       .groupBy('category.id, category.name, category.type')
+      .getRawMany();
+  }
+
+  async getSpendingBreakdownByReason(userId: number, month: number, year: number): Promise<any[]> {
+    return this.transactionRepository
+      .createQueryBuilder('transaction')
+      .innerJoin('transaction.expenseReason', 'reason')
+      .leftJoin('transaction.category', 'category')
+      .select('reason.id', 'reasonId')
+      .addSelect('reason.name', 'reasonName')
+      .addSelect('category.type', 'categoryType')
+      .addSelect('SUM(transaction.amount)', 'totalAmount')
+      .where('transaction.userId = :userId', { userId })
+      .andWhere('transaction.month = :month', { month })
+      .andWhere('transaction.year = :year', { year })
+      .andWhere('transaction.transactionType = :type', { type: 'debit' })
+      .groupBy('reason.id, reason.name, category.type')
+      .orderBy('SUM(transaction.amount)', 'DESC')
       .getRawMany();
   }
 }

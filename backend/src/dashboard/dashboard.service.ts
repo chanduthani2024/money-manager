@@ -79,6 +79,16 @@ export class DashboardService {
     return this.getTopSpendingReasons(userId, month, year);
   }
 
+  async getSpendingBreakdown(userId: number, month: number, year: number): Promise<any[]> {
+    const rows = await this.transactionsService.getSpendingBreakdownByReason(userId, month, year);
+    return rows.map(r => ({
+      reasonId: Number(r.reasonId),
+      reasonName: r.reasonName,
+      categoryType: (r.categoryType ?? '').toLowerCase(),
+      totalAmount: parseFloat(r.totalAmount),
+    }));
+  }
+
   private async getTopSpendingReasons(userId: number, month: number, year: number, limit?: number): Promise<TopSpendingReason[]> {
     // innerJoin ensures expenseReason is always present in the result rows
     const qb = this.transactionRepository
