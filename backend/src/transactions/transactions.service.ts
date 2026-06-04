@@ -1,6 +1,6 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In, IsNull } from 'typeorm';
+import { Repository, In, IsNull } from 'typeorm';
 import { google } from 'googleapis';
 import { Transaction } from '../entities/transaction.entity';
 import { BudgetAllocation } from '../entities/budget-allocation.entity';
@@ -100,8 +100,12 @@ export class TransactionsService {
     return getBody(payload);
   }
 
-  private parseGmailTransaction(snippet: string, rawDate?: string) {
-    const snippetLower = (snippet || '').toLowerCase();
+  private parseGmailTransaction(snippet: string, rawDate?: string, body?: string) {
+    // Strip HTML tags from body so regex can search plain text.
+    // Combine snippet + body so a truncated snippet can be completed by the body.
+    const plainBody = body ? body.replace(/<[^>]*>/g, ' ').replace(/\s{2,}/g, ' ') : '';
+    const fullText = `${snippet || ''} ${plainBody}`.trim();
+    const snippetLower = fullText.toLowerCase();
 
     // Detect if this is a credit card transaction
     const isCreditCard = snippetLower.includes('credit card');
@@ -126,9 +130,9 @@ export class TransactionsService {
 
     // Regex handles all formats:
     // Rs.10.00 | Rs. INR 16280.00 | Rs.INR 71200.00 | INR 33700.00
-    const amountMatch = (snippet || '').match(/(?:rs\.?\s*(?:inr\s*)?|inr\s+)[\d,]+(?:\.\d{1,2})?/i);
+    const amountMatch = fullText.match(/(?:rs\.?\s*(?:inr\s*)?|inr\s+)[\d,]+(?:\.\d{1,2})?/i);
     console.log(`Parsing Gmail transaction: "${snippet}" | Detected amount: ${amountMatch ? amountMatch[0] : 'none'} | Type: ${transactionType}`);
-    const amount = amountMatch 
+    const amount = amountMatch
       ? parseFloat(amountMatch[0].replace(/rs\.?\s*/i, '').replace(/inr\s*/i, '').replace(/,/g, ''))
       : null;
     console.log(`Parsed amount: ${amount} | Transaction type: ${transactionType} | Raw date: ${rawDate}`);
@@ -136,8 +140,10 @@ export class TransactionsService {
     const dateFromHeader = rawDate ? new Date(rawDate) : null;
     let transactionDate = dateFromHeader && !isNaN(dateFromHeader.getTime()) ? dateFromHeader : null;
 
-    const refNoMatch = (snippet || '').match(/UPI\s*(?:transaction\s*)?(?:reference\s*no\.?:?\s*|Ref\.?\s*No\.?\s*:?\s*)(\d{6,20})/i);
+    // Search fullText (snippet + body) so truncated snippets don't lose the reference number
+    const refNoMatch = fullText.match(/UPI\s*(?:transaction\s*)?(?:reference\s*no\.?:?\s*|Ref\.?\s*No\.?\s*:?\s*)(\d{6,20})/i);
     const refNo = refNoMatch ? refNoMatch[1] : null;
+    console.log(`RefNo extracted: ${refNo ?? 'null'} | Source: ${refNoMatch ? (snippet.includes(refNo!) ? 'snippet' : 'body') : 'not found'}`);
 
     return {
       amount,
@@ -232,6 +238,15 @@ export class TransactionsService {
       console.log(`Gmail sync email fetched: ${email.messageId} | ${email.subject}`);
     });
 
+    // Sort oldest-first so that when ensureMonthlyBudgetExists creates a carry-forward
+    // budget for a new month, all transactions from the preceding month have already
+    // been saved and the previous budget's totalSpent/salary is fully up-to-date.
+    emails.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      return da - db;
+    });
+
     const syncRecord = this.gmailSyncRepository.create({
       userId,
       startDate,
@@ -246,14 +261,27 @@ export class TransactionsService {
         continue;
       }
 
-      const existingTransaction = await this.gmailTransactionRepository.findOne({
+      const existingGmailTx = await this.gmailTransactionRepository.findOne({
         where: { messageId: email.messageId },
       });
-      if (existingTransaction) {
+      if (existingGmailTx) {
         continue;
       }
 
-      const parsed = this.parseGmailTransaction(email.snippet, email.date);
+      const parsed = this.parseGmailTransaction(email.snippet, email.date, email.body);
+
+      // If we have a refNo, check whether this transaction was already imported via PDF.
+      // If a matching transaction record already exists, skip — no need to create a duplicate.
+      if (parsed.refNo) {
+        const pdfImported = await this.transactionRepository.findOne({
+          where: { userId, refNo: parsed.refNo },
+        });
+        if (pdfImported) {
+          console.log(`[GmailSync] Skipping email ${email.messageId} — refNo ${parsed.refNo} already exists in transactions (id=${pdfImported.id})`);
+          continue;
+        }
+      }
+
       const gmailTransaction = this.gmailTransactionRepository.create({
         userId,
         gmailSyncId: savedSyncRecord.id,
@@ -296,6 +324,21 @@ export class TransactionsService {
         const month = istDate.getMonth() + 1;
         const year = istDate.getFullYear();
         const txType: 'debit' | 'credit' = gmailTx.transactionType === 'credited' ? 'credit' : 'debit';
+
+        // Safety-net: skip if a transaction with this refNo was saved between the
+        // pre-save check above and this point (e.g. concurrent sync or race condition).
+        if (gmailTx.refNo) {
+          const alreadyExists = await this.transactionRepository.findOne({
+            where: { userId, refNo: gmailTx.refNo },
+          });
+          if (alreadyExists) {
+            console.log(`[GmailSync] Safety-net skip — refNo ${gmailTx.refNo} already in transactions (id=${alreadyExists.id})`);
+            gmailTx.transactionId = alreadyExists.id;
+            gmailTx.isClassifiedReason = true;
+            await this.gmailTransactionRepository.save(gmailTx);
+            continue;
+          }
+        }
 
         const newTransaction = this.transactionRepository.create({
           amount: Number(gmailTx.amount),
@@ -609,9 +652,33 @@ export class TransactionsService {
       );
     }
 
-    // Carry-forward salary = previous salary − previous totalSpent (remaining balance)
-    const carryForwardSalary = Number(previous.salary) - Number(previous.totalSpent);
+    // Recalculate remaining from actual transactions so the carry-forward is always
+    // accurate even if budget.totalSpent is stale (e.g. mid-batch email sync).
+    const carryForwardSalary = await this.computeActualRemaining(
+      userId, previous.month, previous.year, Number(previous.salary),
+    );
     await this.monthlyBudgetsService.createCarryForward(userId, month, year, carryForwardSalary);
+  }
+
+  private async computeActualRemaining(
+    userId: number, month: number, year: number, salary: number,
+  ): Promise<number> {
+    const rows = await this.transactionRepository
+      .createQueryBuilder('t')
+      .select('t.transactionType', 'type')
+      .addSelect('SUM(t.amount)', 'total')
+      .where('t.userId = :userId', { userId })
+      .andWhere('t.month = :month', { month })
+      .andWhere('t.year = :year', { year })
+      .groupBy('t.transactionType')
+      .getRawMany();
+
+    const debits = parseFloat(rows.find(r => r.type === 'debit')?.total || '0');
+    // Carry-forward = salary − debit spending only. Credits (refunds, UPI received) are
+    // not added back — they don't increase next month's available budget.
+    const remaining = salary - debits;
+    console.log(`[CarryForward] ${month}/${year} salary=${salary} debits=${debits} → carry=${remaining}`);
+    return Math.max(0, remaining);
   }
 
   private async updateBudgetAllocation(

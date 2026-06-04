@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGlobalFilter } from '../contexts/GlobalFilterContext';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { dashboardService } from '../services/dashboard';
 import { transactionService } from '../services/transactions';
@@ -25,8 +26,7 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const { selectedMonth, selectedYear, setSelectedMonth, setSelectedYear } = useGlobalFilter();
   const [syncFromDate, setSyncFromDate] = useState<string>('');
   const [syncToDate, setSyncToDate] = useState<string>('');
   const [syncMode, setSyncMode] = useState<'today' | '7days' | '30days' | 'custom'>('7days');

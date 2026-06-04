@@ -23,12 +23,12 @@ export class HdfcParser implements BankParser {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
 
-      // Group items by rounded Y (tolerance=2) so float differences don't split same visual row
+      // Group items by Y bucket (tolerance=4pt) so slight vertical offsets in the same
+      // table row don't split into separate lines. Snap Y to nearest multiple of 4.
       const lineMap = new Map<number, { x: number; str: string }[]>();
       for (const item of content.items as any[]) {
         const rawY = item.transform[5] as number;
-        // Snap to nearest even number so items within 2 pts merge into one bucket
-        const y = Math.round(rawY / 2) * 2;
+        const y = Math.round(rawY / 4) * 4;
         if (!lineMap.has(y)) lineMap.set(y, []);
         lineMap.get(y)!.push({ x: item.transform[4] as number, str: item.str as string });
       }
@@ -38,7 +38,6 @@ export class HdfcParser implements BankParser {
 
       const pageLines: string[] = [];
       for (const y of sortedYs) {
-        // Sort items left-to-right by X within each line
         const sorted = lineMap.get(y)!.sort((a, b) => a.x - b.x);
         const lineText = sorted.map(it => it.str).join(' ').replace(/\s{2,}/g, ' ').trim();
         if (lineText) pageLines.push(lineText);
@@ -49,16 +48,24 @@ export class HdfcParser implements BankParser {
 
     doc.destroy();
 
-    // Log extracted text for debugging
     console.log(`[HdfcParser] Extracted text sample (first 3000 chars):\n${fullText.slice(0, 3000)}`);
 
     return this.parseText(fullText);
   }
 
   parseText(text: string): ParsedBankTransaction[] {
-    // Strip repeating page footer/header blocks (account info that appears on every page).
-    // These start at "Page No .:" and end just before the next transaction date line.
-    const cleaned = text.replace(/Page No\s*\.\s*:[\s\S]*?(?=\d{2}\/\d{2}\/\d{2,4}\s|$)/g, '\n');
+    // 1. Strip "STATEMENT SUMMARY" and everything after it — the last real transaction
+    //    ends just before this section and must not be contaminated by it.
+    const withoutSummary = text.replace(/STATEMENT SUMMARY\s*:-[\s\S]*/i, '');
+
+    // 2. Strip per-page footer: "HDFC BANK LIMITED" followed by boilerplate disclaimer
+    //    text appears at the bottom of every page in the pdfjs Y-sorted output (y=52 and below).
+    //    Without stripping, it bleeds into the last transaction's block on each page.
+    const withoutFooter = withoutSummary.replace(/HDFC BANK LIMITED[\s\S]*?(?=\d{2}\/\d{2}\/\d{2,4}\s|$)/gi, '\n');
+
+    // 3. Strip repeating page header blocks (start at "Page No .:", end just
+    //    before the next date line or end of string).
+    const cleaned = withoutFooter.replace(/Page No\s*\.\s*:[\s\S]*?(?=\d{2}\/\d{2}\/\d{2,4}\s|$)/g, '\n');
 
     const lines = cleaned
       .split('\n')
@@ -67,15 +74,14 @@ export class HdfcParser implements BankParser {
 
     const TX_DATE_RE = /^(\d{2}\/\d{2}\/\d{2,4})\s+(.*)/;
 
-    // "Data line": starts with ref-no (10-16 digits or alphanum) then value-date then amount then balance
+    // Data line: REF(10-20 alphanum)  VALUE-DATE  AMOUNT  BALANCE
     // e.g. "0000217659586301 01/05/26 2,000.00 69,102.56"
-    // e.g. "SBIN426135855698 15/05/26 19,831.00 23,759.18"
-    const DATA_LINE_RE = /^[\dA-Z]{10,20}\s+\d{2}\/\d{2}\/\d{2,4}\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$/;
+    const DATA_LINE_RE = /[\dA-Z]{10,20}\s+\d{2}\/\d{2}\/\d{2,4}\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})(?:\s|$)/;
 
-    // Amount pattern for fallback extraction from inline lines
+    // Amount pattern: handles both plain (300.00) and Indian-comma (1,675.00) formats
     const AMOUNT_RE = /(?<![\/\d])((?:\d{1,3}(?:,\d{2,3})+|\d+)\.\d{2})(?!\d)/g;
 
-    // Build blocks: each block starts at a date line
+    // Build blocks: each block starts at a TX date line
     const blocks: string[][] = [];
     let current: string[] | null = null;
 
@@ -100,17 +106,18 @@ export class HdfcParser implements BankParser {
       const txDate = this.parseDate(dateMatch[1]);
       if (!txDate) continue;
 
-      const firstLineRest = dateMatch[2];
+      // Skip genuine header / balance-summary lines (bogus date lines from page headers).
+      // Only check block[0] — the date line itself. Checking the full block would
+      // false-positive on "*Closing balance includes funds earmarked..." footer text.
+      if (/opening balance|closing balance|statement of account/i.test(block[0])) continue;
 
-      // Skip header / summary lines
-      if (/opening balance|closing balance|statement of account|statement summary/i.test(block.join(' '))) continue;
-
-      // Strategy 1: find the dedicated "data line" inside the block (non-date continuation lines)
       let txAmount: number | null = null;
       let closingBalance: number | null = null;
 
-      for (let i = 1; i < block.length; i++) {
-        const m = block[i].match(DATA_LINE_RE);
+      // Strategy 1: search ALL lines (including the first) for the DATA_LINE_RE pattern.
+      // This handles both split-row and single-row pdfjs extraction.
+      for (const line of block) {
+        const m = line.match(DATA_LINE_RE);
         if (m) {
           txAmount = parseFloat(m[1].replace(/,/g, ''));
           closingBalance = parseFloat(m[2].replace(/,/g, ''));
@@ -118,9 +125,11 @@ export class HdfcParser implements BankParser {
         }
       }
 
-      // Strategy 2: single-line — extract last two amounts from the date line itself
+      // Strategy 2: full block scan — join all lines and take the last two amounts.
+      // Catches cases where pdfjs merges ref+amounts onto the date line.
       if (txAmount === null) {
-        const allAmounts = [...firstLineRest.matchAll(AMOUNT_RE)].map(m => parseFloat(m[1].replace(/,/g, '')));
+        const blockFull = block.join(' ');
+        const allAmounts = [...blockFull.matchAll(AMOUNT_RE)].map(m => parseFloat(m[1].replace(/,/g, '')));
         if (allAmounts.length >= 2) {
           closingBalance = allAmounts[allAmounts.length - 1];
           txAmount = allAmounts[allAmounts.length - 2];
@@ -130,8 +139,8 @@ export class HdfcParser implements BankParser {
       if (txAmount === null || closingBalance === null) continue;
       if (txAmount <= 0 || txAmount > 10_000_000) continue;
 
-      // Collect narration: everything that isn't a data-line or a footer artifact
-      const narrationParts = [firstLineRest, ...block.slice(1).filter(l => !DATA_LINE_RE.test(l))];
+      // Narration: everything that isn't a data-line or date
+      const narrationParts = block.filter(l => !DATA_LINE_RE.test(l));
       const narration = narrationParts
         .join(' ')
         .replace(AMOUNT_RE, '')
@@ -139,11 +148,8 @@ export class HdfcParser implements BankParser {
         .replace(/\s{2,}/g, ' ')
         .trim();
 
-      // Ref no extraction
       const blockText = block.join(' ');
       const refNo = this.extractRefNo(blockText);
-
-      // Keyword-based credit/debit (will be refined by balance-comparison below)
       const transactionType = this.detectTransactionType(blockText);
 
       raw.push({ date: txDate, narration, refNo, amount: txAmount, transactionType, closingBalance });
@@ -151,8 +157,6 @@ export class HdfcParser implements BankParser {
 
     console.log(`[HdfcParser] raw parsed rows before balance-check: ${raw.length}`);
 
-    // Refine credit/debit using consecutive closing balance comparison
-    // This is more reliable than keyword matching for HDFC statements
     return raw.map((tx, i) => {
       const prevBalance = i === 0 ? null : raw[i - 1].closingBalance;
       if (prevBalance !== null) {
@@ -166,17 +170,22 @@ export class HdfcParser implements BankParser {
   }
 
   private extractRefNo(text: string): string | null {
-    // UPI reference: UPI/316001234567/... or UPI-CR/316001234567/...
-    const upiMatch = text.match(/UPI[-\/](?:CR[-\/]|DR[-\/])?(\d{9,15})/i);
-    if (upiMatch) return upiMatch[1];
+    // 1. Explicit "UPI transaction reference no." pattern
+    const explicitRef = text.match(/UPI\s*(?:transaction\s*)?(?:reference\s*no\.?:?\s*|Ref\.?\s*No\.?\s*:?\s*)(\d{6,20})/i);
+    if (explicitRef) return explicitRef[1];
 
-    // NEFT/IMPS reference number (standalone long digit string)
+    // 2. NEFT/IMPS/RTGS reference
     const neftMatch = text.match(/(?:NEFT|IMPS|RTGS)[^\d]*(\d{9,22})/i);
     if (neftMatch) return neftMatch[1];
 
-    // Standalone ref number line (9-15 digits)
-    const standaloneMatch = text.match(/\b(\d{9,15})\b/);
-    if (standaloneMatch) return standaloneMatch[1];
+    // 3. Extract from data-line ref field: 16-digit number with leading zeros → strip them.
+    // e.g. "0000304278788056" → "304278788056". Avoids phone numbers (no leading zeros).
+    const dataRef = text.match(/\b0{2,6}(\d{9,14})\b/);
+    if (dataRef) return dataRef[1];
+
+    // 4. Narration continuation pattern: "XXXXXXX-123456789012-PAYMENT|PAID|MANDATE"
+    const narratRef = text.match(/-(\d{10,16})-(?:PAYMENT|PAID|UPI|MANDATE)/i);
+    if (narratRef) return narratRef[1];
 
     return null;
   }

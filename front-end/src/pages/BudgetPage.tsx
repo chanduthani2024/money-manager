@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useGlobalFilter } from '../contexts/GlobalFilterContext';
 import { formatCurrency } from '../utils/format';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { budgetService } from '../services/budget';
@@ -18,6 +19,7 @@ interface BudgetForm {
 }
 
 export const BudgetPage: React.FC = () => {
+  const { selectedMonth, selectedYear, setSelectedMonth, setSelectedYear } = useGlobalFilter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenseReasons, setExpenseReasons] = useState<ExpenseReason[]>([]);
   const [currentBudget, setCurrentBudget] = useState<MonthlyBudget | null>(null);
@@ -40,8 +42,8 @@ export const BudgetPage: React.FC = () => {
   } = useForm<BudgetForm>({
     defaultValues: {
       salary: 0,
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
+      month: selectedMonth,
+      year: selectedYear,
       budgetAllocations: [],
     },
   });
@@ -76,13 +78,13 @@ export const BudgetPage: React.FC = () => {
         setCategories(categoriesData);
         setExpenseReasons(expenseReasonsData);
 
-        // Try to get current month's budget
+        // Load budget for the globally selected month/year
         try {
-          const currentBudgetData = await budgetService.getCurrentMonth();
+          const currentBudgetData = await budgetService.getByMonthYear(selectedMonth, selectedYear);
           setCurrentBudget(currentBudgetData);
           populateFormWithBudget(currentBudgetData);
         } catch (error) {
-          // No current budget exists
+          // No budget exists for this month
           setCurrentBudget(null);
         }
       } catch (error) {
@@ -104,7 +106,9 @@ export const BudgetPage: React.FC = () => {
         
         if (month && year && monthYearKey !== lastFetchedMonthYear) {
           setLastFetchedMonthYear(monthYearKey);
-          
+          setSelectedMonth(month);
+          setSelectedYear(year);
+
           const fetchBudget = async () => {
             try {
               const budget = await budgetService.getByMonthYear(month, year);
@@ -343,6 +347,7 @@ export const BudgetPage: React.FC = () => {
                 <input
                   id="salary"
                   type="number"
+                  step="0.01"
                   className="form-input pl-10"
                   placeholder="Enter your monthly salary"
                   {...register('salary', {
@@ -493,6 +498,7 @@ export const BudgetPage: React.FC = () => {
                   <label className="form-label">Allocated Amount</label>
                   <input
                     type="number"
+                    step="0.01"
                     className="form-input"
                     placeholder="Enter amount"
                     {...register(`budgetAllocations.${index}.allocatedAmount` as const, {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useGlobalFilter } from '../contexts/GlobalFilterContext';
 import { formatCurrency } from '../utils/format';
 import { Link } from 'react-router-dom';
 import { transactionService } from '../services/transactions';
@@ -35,6 +36,7 @@ interface TransactionFilters {
 }
 
 export const TransactionsPage: React.FC = () => {
+  const { selectedMonth, selectedYear, setSelectedMonth, setSelectedYear } = useGlobalFilter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingGmailTransactions, setPendingGmailTransactions] = useState<GmailTransaction[]>([]);
   const [pendingSelection, setPendingSelection] = useState<Record<number, number>>({});
@@ -42,8 +44,8 @@ export const TransactionsPage: React.FC = () => {
   const [expenseReasons, setExpenseReasons] = useState<ExpenseReason[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<TransactionFilters>({
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
+    month: selectedMonth,
+    year: selectedYear,
   });
   const [showFilters, setShowFilters] = useState(false);
   const [showReasonSelector, setShowReasonSelector] = useState(false);
@@ -186,10 +188,12 @@ export const TransactionsPage: React.FC = () => {
   };
 
   const clearFilters = () => {
-    setFilters({
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
-    });
+    const now = new Date();
+    const m = now.getMonth() + 1;
+    const y = now.getFullYear();
+    setSelectedMonth(m);
+    setSelectedYear(y);
+    setFilters({ month: m, year: y });
   };
 
 
@@ -317,11 +321,11 @@ export const TransactionsPage: React.FC = () => {
   };
 
   const getTotalAmount = () => {
-    return visibleTransactions.reduce((sum, transaction) => {
+    return Math.abs(visibleTransactions.reduce((sum, transaction) => {
       const amount = typeof transaction.amount === 'string' ? parseFloat(transaction.amount) : transaction.amount;
       const signed = transaction.transactionType === 'credit' ? -amount : amount;
       return sum + (isNaN(signed) ? 0 : signed);
-    }, 0);
+    }, 0));
   };
 
 const searchLower = (filters.search || '').toLowerCase();
@@ -662,13 +666,16 @@ const searchLower = (filters.search || '').toLowerCase();
               <label className="form-label">Month</label>
               <select
                 value={filters.month || ''}
-                onChange={(e) => setFilters(prev => ({
-                  ...prev,
-                  month: e.target.value ? parseInt(e.target.value) : undefined,
-                  // clear date range when using month/year
-                  dateFrom: e.target.value ? undefined : prev.dateFrom,
-                  dateTo: e.target.value ? undefined : prev.dateTo,
-                }))}
+                onChange={(e) => {
+                  const val = e.target.value ? parseInt(e.target.value) : undefined;
+                  if (val) setSelectedMonth(val);
+                  setFilters(prev => ({
+                    ...prev,
+                    month: val,
+                    dateFrom: val ? undefined : prev.dateFrom,
+                    dateTo: val ? undefined : prev.dateTo,
+                  }));
+                }}
                 className="form-input"
               >
                 <option value="">All Months</option>
@@ -684,12 +691,16 @@ const searchLower = (filters.search || '').toLowerCase();
               <label className="form-label">Year</label>
               <select
                 value={filters.year || ''}
-                onChange={(e) => setFilters(prev => ({
-                  ...prev,
-                  year: e.target.value ? parseInt(e.target.value) : undefined,
-                  dateFrom: e.target.value ? undefined : prev.dateFrom,
-                  dateTo: e.target.value ? undefined : prev.dateTo,
-                }))}
+                onChange={(e) => {
+                  const val = e.target.value ? parseInt(e.target.value) : undefined;
+                  if (val) setSelectedYear(val);
+                  setFilters(prev => ({
+                    ...prev,
+                    year: val,
+                    dateFrom: val ? undefined : prev.dateFrom,
+                    dateTo: val ? undefined : prev.dateTo,
+                  }));
+                }}
                 className="form-input"
               >
                 <option value="">All Years</option>

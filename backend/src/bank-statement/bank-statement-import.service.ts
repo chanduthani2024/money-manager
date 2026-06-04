@@ -184,10 +184,32 @@ export class BankStatementImportService {
     if (existing) return;
 
     const previous = await this.monthlyBudgetsService.findMostRecentBefore(userId, month, year);
-    if (!previous) return; // no budget at all — silently skip totalSpent update
+    if (!previous) return; // no budget at all — silently skip
 
-    const carryForward = Number(previous.salary) - Number(previous.totalSpent);
+    // Recalculate from actual transactions so carry-forward is always accurate
+    const carryForward = await this.computeActualRemaining(
+      userId, previous.month, previous.year, Number(previous.salary),
+    );
     await this.monthlyBudgetsService.createCarryForward(userId, month, year, carryForward);
+  }
+
+  private async computeActualRemaining(
+    userId: number, month: number, year: number, salary: number,
+  ): Promise<number> {
+    const rows = await this.transactionRepository
+      .createQueryBuilder('t')
+      .select('t.transactionType', 'type')
+      .addSelect('SUM(t.amount)', 'total')
+      .where('t.userId = :userId', { userId })
+      .andWhere('t.month = :month', { month })
+      .andWhere('t.year = :year', { year })
+      .groupBy('t.transactionType')
+      .getRawMany();
+
+    const debits = parseFloat(rows.find(r => r.type === 'debit')?.total || '0');
+    const remaining = salary - debits;
+    console.log(`[CarryForward] ${month}/${year} salary=${salary} debits=${debits} → carry=${remaining}`);
+    return Math.max(0, remaining);
   }
 
   private async updateMonthlyTotalSpent(
