@@ -228,7 +228,7 @@ export const RegisterPage: React.FC = () => {
             <div className="mt-6">
               <button
                 type="button"
-                onClick={() => window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:3002'}/api/auth/google?mode=signup`}
+                onClick={() => window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:3002/api'}/auth/google?mode=signup`}
                 className="w-full flex justify-center items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
               >
                 <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
