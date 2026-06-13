@@ -25,6 +25,12 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Health check endpoint (no auth, used for uptime monitoring)
+  app.use((req, res, next) => {
+    if (req.path === '/health') return res.status(200).json({ status: 'ok' });
+    next();
+  });
+
   // Redirect legacy callback path to api-prefixed path
   app.use((req, res, next) => {
     if (req.path === '/auth/google/callback') {
