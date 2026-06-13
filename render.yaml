@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: money-manager-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: node dist/main
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_TOKEN_URI
+        value: https://oauth2.googleapis.com/token
+      - key: GOOGLE_AUTH_URI
+        value: https://accounts.google.com/o/oauth2/auth
+      - key: FRONTEND_URL
+        sync: false

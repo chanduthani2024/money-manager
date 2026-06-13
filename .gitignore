@@ -4,6 +4,7 @@
 /backend/dist
 /environments
 backend/environments/
+/front-end/build
 *.env
 *.env.*
 .env
