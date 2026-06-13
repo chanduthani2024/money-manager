@@ -31,7 +31,7 @@ export class BankStatementImportController {
   }))
   async importStatement(
     @Request() req: any,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any,
     @Body() body: { bankSettingsId: string },
   ) {
     if (!file) throw new BadRequestException('No PDF file uploaded');
