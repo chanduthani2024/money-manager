@@ -561,14 +561,20 @@ export class TransactionsService {
 
     await this.transactionRepository.delete(id);
 
-    // Reverse totalSpent (recalculates from remaining transactions in DB).
-    // Also reverse allocation.spentAmount if an expense reason was assigned.
+    // Reverse the effect of this transaction on the budget.
+    // Debit: pass -amount so the debit branch subtracts from spentAmount (reversal).
+    // Credit: pass +amount so the credit branch subtracts from allocatedAmount/salary (reversal).
+    // Using -amount for credit would double-add instead of reversing — same asymmetry as removeExpenseReason.
+    const reverseAmount = transaction.transactionType === 'credit'
+      ? Number(transaction.amount)
+      : -Number(transaction.amount);
+
     await this.updateBudgetAllocation(
       transaction.userId,
       transaction.expenseReasonId,
       transaction.month,
       transaction.year,
-      -Number(transaction.amount),
+      reverseAmount,
       transaction.transactionType
     );
   }
@@ -704,11 +710,31 @@ export class TransactionsService {
 
         if (allocation) {
           if (transactionType === 'credit') {
-            allocation.allocatedAmount = Number(allocation.allocatedAmount) - amountChange; 
+            // amountChange is negative for credit (−amount), so this adds the credit amount back.
+            allocation.allocatedAmount = Number(allocation.allocatedAmount) - amountChange;
+            await this.budgetAllocationRepository.save(allocation);
+            // allocatedAmount changed — keep monthly_budgets.totalAllocated in sync
+            await this.monthlyBudgetsService.updateTotalAllocated(monthlyBudget.id);
           } else {
             allocation.spentAmount = Number(allocation.spentAmount) + amountChange;
+            await this.budgetAllocationRepository.save(allocation);
           }
-          await this.budgetAllocationRepository.save(allocation);
+        } else {
+          // No pre-existing allocation for this reason — create one on the fly so the
+          // transaction is tracked in the budget view even without prior planning.
+          // Debit: allocatedAmount=0 (unplanned spend), spentAmount=amountChange.
+          // Credit: allocatedAmount=−amountChange (=+amount), spentAmount=0.
+          const newAllocation = this.budgetAllocationRepository.create({
+            monthlyBudgetId: monthlyBudget.id,
+            expenseReasonId,
+            allocatedAmount: transactionType === 'credit' ? -amountChange : 0,
+            spentAmount:     transactionType === 'credit' ? 0 : amountChange,
+          });
+          await this.budgetAllocationRepository.save(newAllocation);
+          // For credit the allocatedAmount is non-zero — sync totalAllocated on the budget.
+          if (transactionType === 'credit') {
+            await this.monthlyBudgetsService.updateTotalAllocated(monthlyBudget.id);
+          }
         }
       }
 

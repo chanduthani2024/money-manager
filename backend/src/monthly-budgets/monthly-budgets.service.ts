@@ -154,6 +154,12 @@ export class MonthlyBudgetsService {
     });
   }
 
+  async updateTotalAllocated(budgetId: number): Promise<void> {
+    const allocations = await this.budgetAllocationRepository.find({ where: { monthlyBudgetId: budgetId } });
+    const totalAllocated = allocations.reduce((sum, a) => sum + Number(a.allocatedAmount), 0);
+    await this.monthlyBudgetRepository.update(budgetId, { totalAllocated });
+  }
+
   async updateTotalSpent(budgetId: number, transactionType: string , amountChange: number): Promise<void> {
     // Get the monthly budget to find the month, year, and userId
     const monthlyBudget = await this.monthlyBudgetRepository.findOne({

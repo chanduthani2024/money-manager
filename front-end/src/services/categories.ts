@@ -14,6 +14,10 @@ export const categoryService = {
     return apiClient.post<Category>('/categories', data);
   },
 
+  async update(id: number, data: Partial<Omit<Category, 'id' | 'expenseReasons'>>): Promise<Category> {
+    return apiClient.patch<Category>(`/categories/${id}`, data);
+  },
+
   async initializeDefaults(): Promise<void> {
     return apiClient.post<void>('/categories/initialize');
   },

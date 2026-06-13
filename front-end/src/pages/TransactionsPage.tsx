@@ -532,9 +532,6 @@ const searchLower = (filters.search || '').toLowerCase();
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">🏷️ Needs Categorization</h2>
-              <p className="text-sm text-gray-500">
-                {filteredUncategorized.length} of {uncategorizedTransactions.length} transaction{uncategorizedTransactions.length !== 1 ? 's' : ''} shown
-              </p>
             </div>
             {/* Month / Year filter */}
             <div className="flex items-center gap-2 shrink-0">

@@ -72,9 +72,21 @@ export const CategoriesPage: React.FC = () => {
   };
 
   const handleUpdateCategory = async () => {
-    // Note: Update functionality not yet implemented in service
-    toast('Update functionality will be available soon', { icon: 'ℹ️' });
-    setEditingCategory(null);
+    if (!editingCategory || !editingCategory.name.trim()) {
+      toast.error('Category name is required');
+      return;
+    }
+    try {
+      await categoryService.update(editingCategory.id, {
+        name: editingCategory.name,
+        type: editingCategory.type,
+      });
+      toast.success('Category updated successfully');
+      setEditingCategory(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to update category');
+    }
   };
 
   const handleDeleteCategory = async (categoryId: number, categoryName: string) => {

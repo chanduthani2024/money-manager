@@ -634,19 +634,43 @@ export const DashboardPage: React.FC = () => {
           <div className="flex flex-wrap gap-1.5 mb-5">
             {breakdownRows.map(r => {
               const active = !disabledReasons.has(r.reasonId);
+              const type = (r.categoryType || '').toLowerCase();
+              const dotColor = type === 'wants'
+                ? 'bg-purple-400'
+                : type === 'needs'
+                ? 'bg-blue-400'
+                : type === 'investments'
+                ? 'bg-green-400'
+                : 'bg-gray-400';
+              const badgeStyle = type === 'wants'
+                ? 'bg-purple-100 text-purple-700'
+                : type === 'needs'
+                ? 'bg-blue-100 text-blue-700'
+                : type === 'investments'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-gray-100 text-gray-500';
+              const label = type === 'wants' ? 'W' : type === 'needs' ? 'N' : type === 'investments' ? 'I' : '?';
               return (
-                <button
-                  key={r.reasonId}
-                  onClick={() => toggleReason(r.reasonId)}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
-                    active
-                      ? 'bg-gray-800 text-white border-gray-800'
-                      : 'bg-white text-gray-400 border-gray-200 line-through'
-                  }`}
-                >
-                  {active && <span className="w-1.5 h-1.5 rounded-full bg-white opacity-70 flex-shrink-0" />}
-                  {r.reasonName}
-                </button>
+                <div key={r.reasonId} className="relative group">
+                  <button
+                    onClick={() => toggleReason(r.reasonId)}
+                    className={`inline-flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150 ${
+                      active
+                        ? 'bg-gray-800 text-white border-gray-800'
+                        : 'bg-white text-gray-400 border-gray-200 line-through'
+                    }`}
+                  >
+                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold flex-shrink-0 ${active ? badgeStyle : 'bg-gray-100 text-gray-400'}`}>
+                      {label}
+                    </span>
+                    {r.reasonName}
+                  </button>
+                  {/* Hover tooltip — debit-only amount */}
+                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex items-center whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] text-white shadow-lg z-10">
+                    {formatCurrency(r.totalAmount)}
+                    <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                  </div>
+                </div>
               );
             })}
           </div>

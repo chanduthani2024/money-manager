@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -15,14 +15,17 @@ export class CategoriesController {
 
   @Get()
   findAll(@Req() req) {
-    console.log('Fetching categories for user:', req.user.id);
-    console.log('Fetching categories for user:', this.categoriesService.findAll(req.user.id));
     return this.categoriesService.findAll(req.user.id);
   }
 
   @Get(':id')
   findOne(@Req() req, @Param('id') id: string) {
     return this.categoriesService.findOne(req.user.id, +id);
+  }
+
+  @Patch(':id')
+  update(@Req() req, @Param('id') id: string, @Body() updateDto: any) {
+    return this.categoriesService.update(req.user.id, +id, updateDto);
   }
 
   @Post('initialize')

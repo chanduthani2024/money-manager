@@ -6,4 +6,6 @@
 backend/environments/
 *.env
 *.env.*
+.env
+.env.*
 client_secret_*.json

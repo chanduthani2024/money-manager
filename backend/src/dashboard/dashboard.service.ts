@@ -49,7 +49,7 @@ export class DashboardService {
     const monthlyComparison = await this.getMonthlyComparison(userId, currentMonth, currentYear);
 
     // Get budget status
-    const budgetStatus = await this.getBudgetStatus(monthlyBudget.id);
+    const budgetStatus = await this.getBudgetStatus(monthlyBudget.id, userId, currentMonth, currentYear);
 
     return {
       totalSalary: Number(monthlyBudget.salary),
@@ -194,15 +194,41 @@ export class DashboardService {
     };
   }
 
-  private async getBudgetStatus(monthlyBudgetId: number): Promise<BudgetStatus[]> {
+  private async getBudgetStatus(
+    monthlyBudgetId: number,
+    userId: number,
+    month: number,
+    year: number,
+  ): Promise<BudgetStatus[]> {
     const allocations = await this.budgetAllocationRepository.find({
       where: { monthlyBudgetId },
       relations: ['expenseReason', 'expenseReason.category'],
     });
 
+    if (allocations.length === 0) return [];
+
+    // One query: sum debit-only transactions grouped by expenseReasonId for this month/year.
+    // This replaces reading allocation.spentAmount which can include credit effects.
+    const expenseReasonIds = allocations.map(a => a.expenseReasonId);
+    const debitTotals = await this.transactionRepository
+      .createQueryBuilder('t')
+      .select('t.expenseReasonId', 'expenseReasonId')
+      .addSelect('COALESCE(SUM(t.amount), 0)', 'total')
+      .where('t.userId = :userId', { userId })
+      .andWhere('t.month = :month', { month })
+      .andWhere('t.year = :year', { year })
+      .andWhere('t.transactionType = :type', { type: 'debit' })
+      .andWhere('t.expenseReasonId IN (:...ids)', { ids: expenseReasonIds })
+      .groupBy('t.expenseReasonId')
+      .getRawMany();
+
+    const spentByReason = new Map<number, number>(
+      debitTotals.map(r => [Number(r.expenseReasonId), parseFloat(r.total || '0')]),
+    );
+
     return allocations.map(allocation => {
       const allocatedAmount = Number(allocation.allocatedAmount);
-      const spentAmount = Number(allocation.spentAmount);
+      const spentAmount = spentByReason.get(allocation.expenseReasonId) ?? 0;
       const remainingAmount = allocatedAmount - spentAmount;
       const percentageUsed = allocatedAmount > 0 ? (spentAmount / allocatedAmount) * 100 : 0;
 
