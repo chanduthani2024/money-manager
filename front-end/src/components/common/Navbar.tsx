@@ -9,10 +9,15 @@ import {
   LogOut,
   Sparkles,
   Calendar,
-  Tag
+  Tag,
+  HelpCircle,
 } from 'lucide-react';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  onStartTour?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onStartTour }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -22,12 +27,12 @@ export const Navbar: React.FC = () => {
   };
 
   const navItems = [
-    { to: '/', icon: Home, label: 'Dashboard' },
-    { to: '/budget', icon: IndianRupee, label: 'Budget' },
-    { to: '/add-expense', icon: Plus, label: 'Add Expense' },
-    { to: '/transactions', icon: Calendar, label: 'Transactions' },
-    { to: '/categories', icon: Tag, label: 'Categories' },
-    { to: '/settings', icon: Settings, label: 'Settings' },
+    { to: '/', icon: Home, label: 'Dashboard', tour: 'dashboard' },
+    { to: '/budget', icon: IndianRupee, label: 'Budget', tour: 'budget' },
+    { to: '/add-expense', icon: Plus, label: 'Add Expense', tour: 'add-expense' },
+    { to: '/transactions', icon: Calendar, label: 'Transactions', tour: 'transactions' },
+    { to: '/categories', icon: Tag, label: 'Categories', tour: 'categories' },
+    { to: '/settings', icon: Settings, label: 'Settings', tour: 'settings' },
   ];
 
   return (
@@ -44,6 +49,7 @@ export const Navbar: React.FC = () => {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  data-tour={item.tour}
                   className={({ isActive }) =>
                     `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
                       isActive
@@ -58,19 +64,27 @@ export const Navbar: React.FC = () => {
               ))}
             </div>
           </div>
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <span className="text-gray-700 mr-4">
-                Welcome, {user?.firstName}!
-              </span>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-700 text-sm hidden sm:block">
+              Welcome, {user?.firstName}!
+            </span>
+            {onStartTour && (
               <button
-                onClick={handleLogout}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                onClick={onStartTour}
+                title="Take a tour"
+                className="inline-flex items-center px-2 py-2 text-sm text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
               >
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
+                <HelpCircle className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Tour</span>
               </button>
-            </div>
+            )}
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </button>
           </div>
         </div>
       </div>
