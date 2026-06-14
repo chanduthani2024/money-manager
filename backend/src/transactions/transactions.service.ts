@@ -609,7 +609,7 @@ export class TransactionsService {
   async getUncategorizedTransactions(userId: number): Promise<Transaction[]> {
     return this.transactionRepository.find({
       where: { userId, expenseReasonId: IsNull() },
-      order: { createdAt: 'DESC' },
+      order: { transactionDate: 'DESC', createdAt: 'DESC' },
     });
   }
 
