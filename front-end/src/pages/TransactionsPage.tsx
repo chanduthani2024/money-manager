@@ -580,7 +580,7 @@ const searchLower = (filters.search || '').toLowerCase();
               const txHours = txDate ? txDate.getUTCHours() : 0;
               const txMinutes = txDate ? txDate.getUTCMinutes() : 0;
               const hasRealTime = txHours !== 0 || txMinutes !== 0;
-              const formattedTime = hasRealTime
+              const formattedTime = hasRealTime && txDate
                 ? format(new Date(txDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })), 'h:mm a') + ' • '
                 : '';
               const amountFormatted = formatCurrency(tx.amount);
