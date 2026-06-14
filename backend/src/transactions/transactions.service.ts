@@ -608,11 +608,27 @@ export class TransactionsService {
     return this.findOne(transactionId);
   }
 
-  async getUncategorizedTransactions(userId: number): Promise<Transaction[]> {
-    return this.transactionRepository.find({
+  async getUncategorizedTransactions(userId: number): Promise<(Transaction & { isFromGmail: boolean })[]> {
+    const transactions = await this.transactionRepository.find({
       where: { userId, expenseReasonId: IsNull() },
       order: { transactionDate: 'DESC', createdAt: 'DESC' },
     });
+
+    if (transactions.length === 0) return [];
+
+    const txIds = transactions.map((t) => t.id);
+    const gmailLinked = await this.gmailTransactionRepository
+      .createQueryBuilder('gt')
+      .select('gt.transactionId')
+      .where('gt.transactionId IN (:...txIds)', { txIds })
+      .getRawMany();
+
+    const gmailTxIds = new Set(gmailLinked.map((r) => r.gt_transactionId));
+
+    return transactions.map((tx) => ({
+      ...tx,
+      isFromGmail: gmailTxIds.has(tx.id),
+    }));
   }
 
   async assignExpenseReason(
