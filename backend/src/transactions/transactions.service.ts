@@ -142,8 +142,9 @@ export class TransactionsService {
 
     // Search fullText (snippet + body) so truncated snippets don't lose the reference number
     const refNoMatch = fullText.match(/UPI\s*(?:transaction\s*)?(?:reference\s*no\.?:?\s*|Ref\.?\s*No\.?\s*:?\s*)(\d{6,20})/i);
-    const refNo = refNoMatch ? refNoMatch[1] : null;
-    console.log(`RefNo extracted: ${refNo ?? 'null'} | Source: ${refNoMatch ? (snippet.includes(refNo!) ? 'snippet' : 'body') : 'not found'}`);
+    // Strip leading zeros so Gmail refNos (e.g. 096968116625) match bank statement refNos (e.g. 96968116625)
+    const refNo = refNoMatch ? refNoMatch[1].replace(/^0+/, '') : null;
+    console.log(`RefNo extracted: ${refNo ?? 'null'} | Source: ${refNoMatch ? (snippet.includes(refNoMatch[1]) ? 'snippet' : 'body') : 'not found'}`);
 
     return {
       amount,
@@ -328,11 +329,12 @@ export class TransactionsService {
         // Safety-net: skip if a transaction with this refNo was saved between the
         // pre-save check above and this point (e.g. concurrent sync or race condition).
         if (gmailTx.refNo) {
+          const normalizedRefNo = gmailTx.refNo.replace(/^0+/, '');
           const alreadyExists = await this.transactionRepository.findOne({
-            where: { userId, refNo: gmailTx.refNo },
+            where: { userId, refNo: normalizedRefNo },
           });
           if (alreadyExists) {
-            console.log(`[GmailSync] Safety-net skip — refNo ${gmailTx.refNo} already in transactions (id=${alreadyExists.id})`);
+            console.log(`[GmailSync] Safety-net skip — refNo ${normalizedRefNo} already in transactions (id=${alreadyExists.id})`);
             gmailTx.transactionId = alreadyExists.id;
             gmailTx.isClassifiedReason = true;
             await this.gmailTransactionRepository.save(gmailTx);

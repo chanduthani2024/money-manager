@@ -573,18 +573,22 @@ const searchLower = (filters.search || '').toLowerCase();
           ) : (
           <div className="space-y-3">
             {pageItems.map((tx) => {
-              const istDate = new Date(new Date(tx.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-              const formattedDate = tx.transactionDate
-                ? new Date(tx.transactionDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })
+              const txDate = tx.transactionDate ? new Date(tx.transactionDate) : null;
+              const formattedDate = txDate
+                ? txDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })
                 : 'No date';
-              const formattedTime = format(istDate, 'h:mm a');
-              const formattedCreatedDate = format(istDate, 'MMM d, yyyy');
+              const txHours = txDate ? txDate.getUTCHours() : 0;
+              const txMinutes = txDate ? txDate.getUTCMinutes() : 0;
+              const hasRealTime = txHours !== 0 || txMinutes !== 0;
+              const formattedTime = hasRealTime
+                ? format(new Date(txDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })), 'h:mm a') + ' • '
+                : '';
               const amountFormatted = formatCurrency(tx.amount);
               return (
                 <div key={tx.id} className="border border-orange-200 bg-orange-50 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1">
                     <p className="text-sm text-gray-700 font-medium">{formattedDate}</p>
-                    <p className="text-xs text-gray-500">{formattedTime} • {formattedCreatedDate}</p>
+                    <p className="text-xs text-gray-500">{formattedTime}{formattedDate}</p>
                     {tx.notes && <p className="text-sm text-gray-600 mt-1">{tx.notes}</p>}
                   </div>
                   <div className="flex items-center gap-4">
