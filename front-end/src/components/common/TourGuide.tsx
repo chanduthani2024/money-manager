@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
+import React from 'react';
+import { Joyride, STATUS, EVENTS } from 'react-joyride';
 
 const TOUR_KEY = 'culture_tour_done';
 
-const steps: Step[] = [
+const steps = [
   {
     target: 'body',
     placement: 'center',
-    disableBeacon: true,
     title: 'Welcome to Culture!',
     content: (
       <div className="space-y-2 text-sm text-left">
@@ -19,7 +18,6 @@ const steps: Step[] = [
   {
     target: '[data-tour="budget"]',
     placement: 'bottom',
-    disableBeacon: true,
     title: '1. Set Your Opening Balance',
     content: (
       <div className="text-sm text-left space-y-2">
@@ -36,7 +34,6 @@ const steps: Step[] = [
   {
     target: '[data-tour="settings"]',
     placement: 'bottom',
-    disableBeacon: true,
     title: '2. Configure Settings',
     content: (
       <div className="text-sm text-left space-y-2">
@@ -51,7 +48,6 @@ const steps: Step[] = [
   {
     target: '[data-tour="categories"]',
     placement: 'bottom',
-    disableBeacon: true,
     title: '3. Set Up Categories & Reasons',
     content: (
       <div className="text-sm text-left space-y-2">
@@ -68,7 +64,6 @@ const steps: Step[] = [
   {
     target: '[data-tour="transactions"]',
     placement: 'bottom',
-    disableBeacon: true,
     title: '4. Classify Transactions',
     content: (
       <div className="text-sm text-left space-y-2">
@@ -84,7 +79,6 @@ const steps: Step[] = [
   {
     target: '[data-tour="budget"]',
     placement: 'bottom',
-    disableBeacon: true,
     title: '5. Allocate Your Budget',
     content: (
       <div className="text-sm text-left space-y-2">
@@ -99,7 +93,6 @@ const steps: Step[] = [
   {
     target: '[data-tour="dashboard"]',
     placement: 'bottom',
-    disableBeacon: true,
     title: '6. Track on the Dashboard',
     content: (
       <div className="text-sm text-left space-y-2">
@@ -121,9 +114,12 @@ interface TourGuideProps {
 }
 
 export const TourGuide: React.FC<TourGuideProps> = ({ run, onFinish }) => {
-  const handleCallback = (data: CallBackProps) => {
-    const { status } = data;
-    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+  const handleEvent = (data: any) => {
+    const { status, type } = data;
+    if (
+      type === EVENTS.TOUR_END &&
+      (status === STATUS.FINISHED || status === STATUS.SKIPPED)
+    ) {
       localStorage.setItem(TOUR_KEY, 'true');
       onFinish();
     }
@@ -131,39 +127,13 @@ export const TourGuide: React.FC<TourGuideProps> = ({ run, onFinish }) => {
 
   return (
     <Joyride
-      steps={steps}
+      steps={steps as any}
       run={run}
       continuous
-      showProgress
-      showSkipButton
       scrollToFirstStep
-      callback={handleCallback}
-      styles={{
-        options: {
-          primaryColor: '#6366f1',
-          zIndex: 10000,
-        },
-        tooltip: {
-          borderRadius: '12px',
-          fontSize: '14px',
-          maxWidth: '360px',
-        },
-        tooltipTitle: {
-          fontSize: '15px',
-          fontWeight: 600,
-        },
-        buttonNext: {
-          borderRadius: '8px',
-          padding: '8px 16px',
-        },
-        buttonBack: {
-          borderRadius: '8px',
-          padding: '8px 16px',
-        },
-        buttonSkip: {
-          color: '#9ca3af',
-        },
-      }}
+      onEvent={handleEvent}
+      options={{ buttons: ['back', 'primary', 'skip'] } as any}
+      styles={{ options: { primaryColor: '#6366f1', zIndex: 10000 } } as any}
       locale={{
         back: 'Back',
         close: 'Close',
