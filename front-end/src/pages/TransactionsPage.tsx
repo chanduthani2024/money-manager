@@ -62,6 +62,7 @@ export const TransactionsPage: React.FC = () => {
   const [uncategorizedYearFilter, setUncategorizedYearFilter] = useState<number | undefined>(new Date().getFullYear());
   const [monthlyBudgetSalary, setMonthlyBudgetSalary] = useState<number | null>(null);
   const [deleteModalTransaction, setDeleteModalTransaction] = useState<Transaction | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchPendingGmailTransactions = async () => {
     try {
@@ -144,6 +145,7 @@ export const TransactionsPage: React.FC = () => {
 
   const handleDeleteTransaction = async (transactionId: number) => {
     try {
+      setDeleting(true);
       await transactionService.delete(transactionId);
       toast.success('Transaction deleted successfully');
       setDeleteModalTransaction(null);
@@ -151,11 +153,14 @@ export const TransactionsPage: React.FC = () => {
       fetchUncategorizedTransactions();
     } catch (error) {
       toast.error('Failed to delete transaction');
+    } finally {
+      setDeleting(false);
     }
   };
 
   const handleRemoveExpenseReason = async (transactionId: number) => {
     try {
+      setDeleting(true);
       await transactionService.removeExpenseReason(transactionId);
       toast.success('Expense reason removed successfully');
       setDeleteModalTransaction(null);
@@ -163,6 +168,8 @@ export const TransactionsPage: React.FC = () => {
       fetchUncategorizedTransactions();
     } catch (error) {
       toast.error('Failed to remove expense reason');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1190,12 +1197,14 @@ const searchLower = (filters.search || '').toLowerCase();
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900">Delete Transaction</h3>
               </div>
-              <button
-                onClick={() => setDeleteModalTransaction(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
+              {!deleting && (
+                <button
+                  onClick={() => setDeleteModalTransaction(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5 text-gray-500" />
+                </button>
+              )}
             </div>
 
             <div className="p-6 space-y-4">
@@ -1213,11 +1222,12 @@ const searchLower = (filters.search || '').toLowerCase();
               <div className="space-y-3">
                 {deleteModalTransaction.expenseReasonId && (
                   <button
+                    disabled={deleting}
                     onClick={() => handleRemoveExpenseReason(deleteModalTransaction.id)}
-                    className="w-full flex items-start gap-3 p-4 border-2 border-orange-200 bg-orange-50 rounded-lg hover:border-orange-300 hover:bg-orange-100 transition-all text-left"
+                    className="w-full flex items-start gap-3 p-4 border-2 border-orange-200 bg-orange-50 rounded-lg hover:border-orange-300 hover:bg-orange-100 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <X className="h-4 w-4 text-orange-600" />
+                      {deleting ? <span className="h-4 w-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin inline-block" /> : <X className="h-4 w-4 text-orange-600" />}
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 text-sm">Remove expense reason only</p>
@@ -1229,14 +1239,15 @@ const searchLower = (filters.search || '').toLowerCase();
                 )}
 
                 <button
+                  disabled={deleting}
                   onClick={() => handleDeleteTransaction(deleteModalTransaction.id)}
-                  className="w-full flex items-start gap-3 p-4 border-2 border-red-200 bg-red-50 rounded-lg hover:border-red-300 hover:bg-red-100 transition-all text-left"
+                  className="w-full flex items-start gap-3 p-4 border-2 border-red-200 bg-red-50 rounded-lg hover:border-red-300 hover:bg-red-100 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Trash2 className="h-4 w-4 text-red-600" />
+                    {deleting ? <span className="h-4 w-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin inline-block" /> : <Trash2 className="h-4 w-4 text-red-600" />}
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900 text-sm">Delete transaction permanently</p>
+                    <p className="font-medium text-gray-900 text-sm">{deleting ? 'Deleting...' : 'Delete transaction permanently'}</p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Removes the transaction and reverses all budget impacts. This cannot be undone.
                     </p>
@@ -1245,8 +1256,9 @@ const searchLower = (filters.search || '').toLowerCase();
               </div>
 
               <button
+                disabled={deleting}
                 onClick={() => setDeleteModalTransaction(null)}
-                className="w-full btn btn-secondary text-sm"
+                className="w-full btn btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
